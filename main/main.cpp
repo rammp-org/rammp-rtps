@@ -12,7 +12,7 @@ extern "C" void app_main(void) {
   espp::Logger logger({.tag = "Template", .level = espp::Logger::Verbosity::DEBUG});
 
   logger.info("Bootup");
-  static_assert(rammp::rtps::kTopicDefinitions.size() > 0);
+  static_assert(RAMMP_MCB_STATUS_TIMEOUT_MS > RAMMP_MCB_STATUS_PERIOD_MS);
 
   // counter to show the number of prints, shared between main and task
   std::atomic<int> counter = 0;

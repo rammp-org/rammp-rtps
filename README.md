@@ -7,13 +7,15 @@ and types in this repository, then consume this repository as a submodule.
 
 ## Repository layout
 
-- [`main/rtps_topics.hpp`](./main/rtps_topics.hpp): central topic/type registry.
+- [`main/rtps_topics.hpp`](./main/rtps_topics.hpp): central topic/type and
+  message contract header.
 
 ## Add a new RTPS topic and type
 
-1. Define the payload type in `main/rtps_topics.hpp`.
-2. Add a `TopicTraits<T>` specialization for that type.
-3. Add an entry to `kTopicDefinitions`.
+1. Add topic/type macros (`RAMMP_TOPIC_*`, `RAMMP_TYPE_*`) in
+   `main/rtps_topics.hpp`.
+2. Add or extend message constants/enums used by all consumers.
+3. Add/update shared `typedef struct` message contracts.
 
 Keep topic names and type names stable once released, since they are consumed by
 multiple projects.
