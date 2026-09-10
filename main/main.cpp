@@ -3,6 +3,7 @@
 #include <thread>
 
 #include "logger.hpp"
+#include "rtps_topics.hpp"
 #include "task.hpp"
 
 using namespace std::chrono_literals;
@@ -11,6 +12,7 @@ extern "C" void app_main(void) {
   espp::Logger logger({.tag = "Template", .level = espp::Logger::Verbosity::DEBUG});
 
   logger.info("Bootup");
+  static_assert(rammp::rtps::kTopicDefinitions.size() > 0);
 
   // counter to show the number of prints, shared between main and task
   std::atomic<int> counter = 0;

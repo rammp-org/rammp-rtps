@@ -43,7 +43,6 @@ set(
   "List of components to include"
   )
 
-# TODO: update this with your project's name
-project(template)
+project(rammp_rtps)
 
 set(CMAKE_CXX_STANDARD 20)
