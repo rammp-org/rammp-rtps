@@ -3,7 +3,7 @@
 #include <thread>
 
 #include "logger.hpp"
-#include "rtps_topics.hpp"
+#include "rtps_interface.hpp"
 #include "task.hpp"
 
 using namespace std::chrono_literals;
@@ -12,7 +12,6 @@ extern "C" void app_main(void) {
   espp::Logger logger({.tag = "Template", .level = espp::Logger::Verbosity::DEBUG});
 
   logger.info("Bootup");
-  static_assert(RAMMP_MCB_STATUS_TIMEOUT_MS > RAMMP_MCB_STATUS_PERIOD_MS);
 
   // counter to show the number of prints, shared between main and task
   std::atomic<int> counter = 0;
