@@ -11,7 +11,7 @@ set(EXTRA_COMPONENT_DIRS
   #       `components/` folder within this repository and update the line below
   #       to point to it.
   #
-  # "components/"
+  "components/"
 
   # NOTE: if we didn't use the idf-component-manager to get the espp
   #       dependencies, we could instead have ESPP be a submodule within our
@@ -43,7 +43,6 @@ set(
   "List of components to include"
   )
 
-# TODO: update this with your project's name
-project(template)
+project(rammp_rtps)
 
 set(CMAKE_CXX_STANDARD 20)

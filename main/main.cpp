@@ -3,6 +3,7 @@
 #include <thread>
 
 #include "logger.hpp"
+#include "rtps_interface.hpp"
 #include "task.hpp"
 
 using namespace std::chrono_literals;
