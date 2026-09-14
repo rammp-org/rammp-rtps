@@ -11,7 +11,13 @@
  *   float = float, std::string = string, std::vector<T> = sequence<T>; an enum is its width.
  * - Best-effort, no durability: state is resent periodically. Timing is each device's own.
  *
- * Contents: Topics, Tables (actuators, diagnostics), Messages, Names and helpers.
+ * Naming, for every message:
+ *   struct <Message>                    XYTwist
+ *   RAMMP_TYPE_<MESSAGE>                RAMMP_TYPE_XY_TWIST            "rammp/msg/XYTwist"
+ *   RAMMP_TOPIC_<PUBLISHER>_<MESSAGE>   RAMMP_TOPIC_JOYSTICK_XY_TWIST  "rammp/joystick/xy_twist"
+ *   k<Publisher><Message>               kJoystickXYTwist               the typed Topic<XYTwist>
+ *
+ * Contents: Topics and types, Tables (actuators, diagnostics), Messages, Names and helpers.
  *
  * Example (espp, `rtps` a started espp::RtpsParticipant): an MCB publishing Diagnostics
  * and taking the joystick's actuator requests
@@ -21,8 +27,8 @@
  *   diag_pub.publish({.seq = seq++, .items = {{.values = {305, 150, 450}}}});
  *
  *   espp::Subscriber<rammp::ActuatorCommand> cmd_sub(
- *       rtps, {.topic = rammp::kActuatorCommand.name,
- *              .type_name = rammp::kActuatorCommand.type,
+ *       rtps, {.topic = rammp::kJoystickActuatorCommand.name,
+ *              .type_name = rammp::kJoystickActuatorCommand.type,
  *              .on_message = [](const rammp::ActuatorCommand &cmd) {
  *                move_actuator(cmd.actuator_id, cmd.steps); // then publish an ActuatorState
  *              }});
@@ -37,12 +43,27 @@
 #include <string>
 #include <vector>
 
-namespace rammp {
-
 /* -------------------------------------------------------------------------
- * Topics: every topic and the message it carries.
+ * Topics and types: rammp/<publisher>/<message> and rammp/msg/<Message>.
  * ---------------------------------------------------------------------- */
 
+/* joystick -> MCB */
+#define RAMMP_TOPIC_JOYSTICK_XY_TWIST "rammp/joystick/xy_twist"
+#define RAMMP_TYPE_XY_TWIST "rammp/msg/XYTwist"
+#define RAMMP_TOPIC_JOYSTICK_ACTUATOR_COMMAND "rammp/joystick/actuator_command"
+#define RAMMP_TYPE_ACTUATOR_COMMAND "rammp/msg/ActuatorCommand"
+
+/* MCB -> joystick */
+#define RAMMP_TOPIC_MCB_STATUS "rammp/mcb/status"
+#define RAMMP_TYPE_MCB_STATUS "rammp/msg/McbStatus"
+#define RAMMP_TOPIC_MCB_ACTUATOR_STATE "rammp/mcb/actuator_state"
+#define RAMMP_TYPE_ACTUATOR_STATE "rammp/msg/ActuatorState"
+#define RAMMP_TOPIC_MCB_DIAGNOSTICS "rammp/mcb/diagnostics"
+#define RAMMP_TYPE_DIAGNOSTICS "rammp/msg/Diagnostics"
+
+namespace rammp {
+
+/** A DDS topic and type name, tied to the message it carries. */
 template <class Message> struct Topic {
   const char *name; /**< DDS topic name */
   const char *type; /**< DDS type name */
@@ -54,16 +75,15 @@ struct McbStatus;
 struct ActuatorState;
 struct Diagnostics;
 
-/* joystick -> MCB */
-inline constexpr Topic<XYTwist> kJoystickXYTwist{"rammp/joystick/xy_twist", "rammp/msg/XYTwist"};
-inline constexpr Topic<ActuatorCommand> kActuatorCommand{"rammp/actuator/command",
-                                                         "rammp/msg/ActuatorCommand"};
-/* MCB -> joystick */
-inline constexpr Topic<McbStatus> kMcbStatus{"rammp/mcb/status", "rammp/msg/McbStatus"};
-inline constexpr Topic<ActuatorState> kActuatorState{"rammp/actuator/state",
-                                                     "rammp/msg/ActuatorState"};
-inline constexpr Topic<Diagnostics> kMcbDiagnostics{"rammp/mcb/diagnostics",
-                                                    "rammp/msg/Diagnostics"};
+inline constexpr Topic<XYTwist> kJoystickXYTwist{RAMMP_TOPIC_JOYSTICK_XY_TWIST,
+                                                 RAMMP_TYPE_XY_TWIST};
+inline constexpr Topic<ActuatorCommand> kJoystickActuatorCommand{
+    RAMMP_TOPIC_JOYSTICK_ACTUATOR_COMMAND, RAMMP_TYPE_ACTUATOR_COMMAND};
+inline constexpr Topic<McbStatus> kMcbStatus{RAMMP_TOPIC_MCB_STATUS, RAMMP_TYPE_MCB_STATUS};
+inline constexpr Topic<ActuatorState> kMcbActuatorState{RAMMP_TOPIC_MCB_ACTUATOR_STATE,
+                                                        RAMMP_TYPE_ACTUATOR_STATE};
+inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
+                                                    RAMMP_TYPE_DIAGNOSTICS};
 
 /* -------------------------------------------------------------------------
  * Tables: one row per actuator / diagnostics item. To add one, add ONE row: the next

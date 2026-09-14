@@ -22,8 +22,11 @@ and types in this repository, then consume this repository as a submodule.
   `components/rammp_rtps_messages/include/messages/joystick_message.hpp` (C++20; the
   struct is the XCDR1 wire layout, fields in order).
 2. Give its enums a fixed wire width: `enum class X : uint8_t` (no plain enums).
-3. Add its `Topic<Message>` constant (topic + type name) right after the struct, so
-  a publisher or subscriber for the wrong message does not compile.
+3. Name it with the pattern, in the "Topics and types" block at the top:
+  `#define RAMMP_TOPIC_<PUBLISHER>_<MESSAGE> "rammp/<publisher>/<message>"`,
+  `#define RAMMP_TYPE_<MESSAGE> "rammp/msg/<Message>"`, and the typed
+  `inline constexpr Topic<Message> k<Publisher><Message>{...}` built from them, so a
+  publisher or subscriber for the wrong message does not compile.
 4. Add action definitions under `components/rammp_rtps_actions/include/`.
 5. Add service definitions under `components/rammp_rtps_services/include/`.
 
