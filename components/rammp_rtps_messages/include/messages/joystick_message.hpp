@@ -2,6 +2,8 @@
  * @file joystick_message.hpp
  * @brief RAMMP joystick <-> MCB RTPS messages: topics, types, and payload structs.
  * Any publisher or subscriber of these topics uses this header, so both sides match.
+ * Only what both sides must agree on lives here; timing, display names and helpers are
+ * each device's own.
  *
  * - C++20. Each struct IS the wire layout: espp/cdr serializes it as XCDR1 (classic
  *   little-endian CDR, what DDS / ROS 2 peers speak), fields in declaration order.
@@ -9,7 +11,7 @@
  *   message: a wrong value, message or handler does not compile.
  * - IDL: uint8_t = octet, int8_t = int8, int32_t = long, uint32_t = unsigned long,
  *   float = float, std::string = string, std::vector<T> = sequence<T>; an enum is its width.
- * - Best-effort, no durability: state is resent periodically. Timing is each device's own.
+ * - Best-effort, no durability: state is resent periodically.
  *
  * Naming, for every message:
  *   struct <Message>                    XYTwist
@@ -17,7 +19,7 @@
  *   RAMMP_TOPIC_<PUBLISHER>_<MESSAGE>   RAMMP_TOPIC_JOYSTICK_XY_TWIST  "rammp/joystick/xy_twist"
  *   k<Publisher><Message>               kJoystickXYTwist               the typed Topic<XYTwist>
  *
- * Contents: Topics and types, Tables (actuators, diagnostics), Messages, Names and helpers.
+ * Contents: Topics and types, Tables (actuators, diagnostics), Messages.
  *
  * Example (espp, `rtps` a started espp::RtpsParticipant): an MCB publishing Diagnostics
  * and taking the joystick's actuator requests
@@ -88,22 +90,23 @@ inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
 /* -------------------------------------------------------------------------
  * Tables: one row per actuator / diagnostics item. To add one, add ONE row: the next
  * id, and a trailing `\` on every row but the last. The MCB then sends one more value
- * per row (ActuatorState.values, Diagnostics.items). Values are raw integers; decimals
- * are display only (2500 with 1 decimal shows "250.0").
+ * per row (ActuatorState.values, Diagnostics.items). A value is a raw integer in units
+ * of 10^-decimals `unit`: ELEVATION 2500 with 1 decimal and "mm" is 250.0 mm.
+ * Display names for the rows are each device's own.
  * ---------------------------------------------------------------------- */
 
-/* X(id, NAME, short, label, min, max, step, decimals, unit) */
+/* X(id, NAME, min, max, step, decimals, unit) */
 #define RAMMP_ACTUATOR_TABLE(X)                                                                    \
-  X(0, ELEVATION, "M1", "Elevation", 0, 2500, 50, 1, "mm")                                         \
-  X(1, REAR_TILT, "M2", "Rear Tilt", 0, 900, 25, 1, "deg")                                         \
-  X(2, FORWARD_TILT, "M3", "Forward Tilt", 0, 450, 25, 1, "deg")                                   \
-  X(3, SIDE_TILT, "M4", "Side Tilt", -300, 300, 25, 1, "deg")
+  X(0, ELEVATION, 0, 2500, 50, 1, "mm")                                                            \
+  X(1, REAR_TILT, 0, 900, 25, 1, "deg")                                                            \
+  X(2, FORWARD_TILT, 0, 450, 25, 1, "deg")                                                         \
+  X(3, SIDE_TILT, -300, 300, 25, 1, "deg")
 
-/* D(id, NAME, short, label, unit1, dec1, unit2, dec2, unit3, dec3); a unit "" = unused */
+/* D(id, NAME, unit1, dec1, unit2, dec2, unit3, dec3); a unit "" = reading unused */
 #define RAMMP_DIAG_TABLE(D)                                                                        \
-  D(0, TEST_1, "T1", "Test actuator 1", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
-  D(1, TEST_2, "T2", "Test actuator 2", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
-  D(2, TEST_3, "T3", "Test actuator 3", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)
+  D(0, TEST_1, "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)                                    \
+  D(1, TEST_2, "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)                                    \
+  D(2, TEST_3, "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)
 
 /* Generated from the tables: the ids (ActuatorId::ELEVATION = 0, ...) and the rows. */
 
@@ -115,18 +118,16 @@ enum class ActuatorId : uint8_t {
 
 struct ActuatorSpec {
   ActuatorId id;
-  const char *short_name; /**< "M1" */
-  const char *label;      /**< "Elevation" */
-  int32_t min_value;      /**< raw units */
-  int32_t max_value;      /**< raw units */
-  int32_t step;           /**< raw units per press */
-  uint8_t decimals;       /**< display only */
-  const char *unit;       /**< "mm" */
+  int32_t min_value; /**< raw units */
+  int32_t max_value; /**< raw units */
+  int32_t step;      /**< raw units moved per ActuatorCommand step */
+  uint8_t decimals;  /**< raw units are 10^-decimals `unit` */
+  const char *unit;  /**< "mm" */
 };
 
 inline constexpr std::array kActuators{
-#define RAMMP_ACTUATOR_ROW(id_, name_, short_, label_, min_, max_, step_, dec_, unit_)             \
-  ActuatorSpec{ActuatorId::name_, short_, label_, min_, max_, step_, dec_, unit_},
+#define RAMMP_ACTUATOR_ROW(id_, name_, min_, max_, step_, dec_, unit_)                             \
+  ActuatorSpec{ActuatorId::name_, min_, max_, step_, dec_, unit_},
     RAMMP_ACTUATOR_TABLE(RAMMP_ACTUATOR_ROW)
 #undef RAMMP_ACTUATOR_ROW
 };
@@ -142,15 +143,13 @@ inline constexpr size_t kDiagFields = 3; /**< readings per diagnostics item */
 
 struct DiagSpec {
   DiagId id;
-  const char *short_name;                     /**< "T1" */
-  const char *label;                          /**< "Test actuator 1" */
   std::array<const char *, kDiagFields> unit; /**< "Temp [C]"; "" = reading unused */
-  std::array<uint8_t, kDiagFields> decimals;  /**< display only */
+  std::array<uint8_t, kDiagFields> decimals;  /**< raw readings are 10^-decimals unit */
 };
 
 inline constexpr std::array kDiagItems{
-#define RAMMP_DIAG_ROW(id_, name_, short_, label_, u1_, d1_, u2_, d2_, u3_, d3_)                   \
-  DiagSpec{DiagId::name_, short_, label_, {u1_, u2_, u3_}, {d1_, d2_, d3_}},
+#define RAMMP_DIAG_ROW(id_, name_, u1_, d1_, u2_, d2_, u3_, d3_)                                   \
+  DiagSpec{DiagId::name_, {u1_, u2_, u3_}, {d1_, d2_, d3_}},
     RAMMP_DIAG_TABLE(RAMMP_DIAG_ROW)
 #undef RAMMP_DIAG_ROW
 };
@@ -186,7 +185,7 @@ struct XYTwist {
 struct ActuatorCommand {
   uint8_t req_id;         /**< +1 per command, wraps; echoed back in ActuatorState */
   ActuatorId actuator_id; /**< which actuator */
-  int8_t steps;           /**< -1 = one "-" press, +1 = one "+" press */
+  int8_t steps;           /**< -1 = one step down, +1 = one step up */
 };
 
 /* -------------------------------------------------------------------------
@@ -200,24 +199,24 @@ enum class DriveStatus : uint8_t {
 
 enum class SystemState : uint8_t {
   OK = 0,    /**< drive and seat allowed */
-  ERROR = 1, /**< a fault: the joystick blocks drive/seat and shows error_text */
+  ERROR = 1, /**< a fault: drive and seat not allowed; error_text says why */
 };
 
-inline constexpr uint8_t kSpeedMaxTenths = 99; /**< speed_tenths 0..99, shown as 0.0..9.9 */
+inline constexpr uint8_t kSpeedMaxTenths = 99; /**< speed_tenths is 0..99 (0.0..9.9) */
 
 /** Drive status, system state, speed, clock and texts. */
 struct McbStatus {
   DriveStatus drive_status;     /**< what the chair does with the stick */
-  SystemState system_state;     /**< OK, or a fault that blocks drive/seat */
+  SystemState system_state;     /**< OK, or a fault */
   uint8_t flags;                /**< reserved, send 0 */
   uint8_t seq;                  /**< +1 per message, wraps */
   uint8_t speed_tenths;         /**< 0..kSpeedMaxTenths */
   uint8_t hour, minute, second; /**< MCB local time */
   uint8_t day, month, year;     /**< month 0 = time unknown; year since 2000 */
-  std::string drive_text;       /**< "" = show the drive_status name */
-  std::string state_text;       /**< "" = show the system_state name */
-  std::string error_text;       /**< banner body while system_state != OK */
-  std::string error_footer;     /**< banner footer */
+  std::string drive_text;       /**< optional wording for drive_status; "" = none */
+  std::string state_text;       /**< optional wording for system_state; "" = none */
+  std::string error_text;       /**< what the fault is, while system_state != OK */
+  std::string error_footer;     /**< what to do about it */
 };
 
 /** The MCB's verdict on a command. Anything but OK = value unchanged. */
@@ -246,34 +245,6 @@ struct Diagnostics {
   uint8_t seq;                 /**< +1 per message, wraps */
   std::vector<DiagItem> items; /**< one per RAMMP_DIAG_TABLE row */
 };
-
-/* -------------------------------------------------------------------------
- * Names and helpers
- * ---------------------------------------------------------------------- */
-
-/** ActuatorId -> its row in kActuators and in ActuatorState.values. The joystick uses it
-    to range-check the MCB's answer and to find the row a refused step flashes. */
-constexpr size_t index_of(ActuatorId id) { return static_cast<size_t>(id); }
-
-/** Names for labels and logs: the joystick shows DriveStatus / SystemState on its
-    status labels and fault banner (when the MCB sends no text), and logs all three.
-    A value neither side knows reads "?". */
-constexpr const char *to_string(DriveStatus v) {
-  return v == DriveStatus::ACTIVE ? "ACTIVE" : v == DriveStatus::INACTIVE ? "INACTIVE" : "?";
-}
-
-constexpr const char *to_string(SystemState v) {
-  return v == SystemState::OK ? "OK" : v == SystemState::ERROR ? "ERROR" : "?";
-}
-
-constexpr const char *to_string(ActuatorResult v) {
-  return v == ActuatorResult::OK           ? "OK"
-         : v == ActuatorResult::AT_MIN     ? "AT_MIN"
-         : v == ActuatorResult::AT_MAX     ? "AT_MAX"
-         : v == ActuatorResult::INHIBITED  ? "INHIBITED"
-         : v == ActuatorResult::UNKNOWN_ID ? "UNKNOWN_ID"
-                                           : "?";
-}
 
 } // namespace rammp
 
