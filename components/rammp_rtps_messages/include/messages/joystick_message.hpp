@@ -251,15 +251,13 @@ struct Diagnostics {
  * Names and helpers
  * ---------------------------------------------------------------------- */
 
-constexpr Buttons operator|(Buttons a, Buttons b) {
-  return static_cast<Buttons>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
-}
-constexpr bool has(Buttons set, Buttons button) {
-  return (static_cast<uint32_t>(set) & static_cast<uint32_t>(button)) != 0;
-}
-
+/** ActuatorId -> its row in kActuators and in ActuatorState.values. The joystick uses it
+    to range-check the MCB's answer and to find the row a refused step flashes. */
 constexpr size_t index_of(ActuatorId id) { return static_cast<size_t>(id); }
 
+/** Names for labels and logs: the joystick shows DriveStatus / SystemState on its
+    status labels and fault banner (when the MCB sends no text), and logs all three.
+    A value neither side knows reads "?". */
 constexpr const char *to_string(DriveStatus v) {
   return v == DriveStatus::ACTIVE ? "ACTIVE" : v == DriveStatus::INACTIVE ? "INACTIVE" : "?";
 }
