@@ -18,12 +18,12 @@ and types in this repository, then consume this repository as a submodule.
 
 ## Add a new RTPS topic and type
 
-1. Add topic/type macros (`RAMMP_TOPIC_*`, `RAMMP_TYPE_*`) in
-  `components/rammp_rtps_messages/include/messages/joystic_message.hpp`.
-2. Add or extend message constants/enums used by all consumers in the matching
-  section of `components/rammp_rtps_messages/include/messages/joystic_message.hpp`.
-3. Add/update shared `typedef struct` message contracts in
-  `components/rammp_rtps_messages/include/messages/joystic_message.hpp`.
+1. Add the message `struct` in
+  `components/rammp_rtps_messages/include/messages/joystick_message.hpp` (C++20; the
+  struct is the XCDR1 wire layout, fields in order).
+2. Give its enums a fixed wire width: `enum class X : uint8_t` (no plain enums).
+3. Add its `Topic<Message>` constant (topic + type name) right after the struct, so
+  a publisher or subscriber for the wrong message does not compile.
 4. Add action definitions under `components/rammp_rtps_actions/include/`.
 5. Add service definitions under `components/rammp_rtps_services/include/`.
 

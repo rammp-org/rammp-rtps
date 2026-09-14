@@ -1,3 +1,3 @@
 #pragma once
 
-#include "messages/joystic_message.hpp"
+#include "messages/joystick_message.hpp"
