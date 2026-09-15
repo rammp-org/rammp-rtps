@@ -2,8 +2,7 @@
  * @file joystick_message.hpp
  * @brief RAMMP joystick <-> MCB RTPS messages: topics, types, and payload structs.
  * Any publisher or subscriber of these topics uses this header, so both sides match.
- * Only what both sides must agree on lives here; timing, display names and helpers are
- * each device's own.
+ * Only what both sides must agree on lives here; timing and helpers are each device's own.
  *
  * - C++20. Each struct IS the wire layout: espp/cdr serializes it as XCDR1 (classic
  *   little-endian CDR, what DDS / ROS 2 peers speak), fields in declaration order.
@@ -90,23 +89,23 @@ inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
 /* -------------------------------------------------------------------------
  * Tables: one row per actuator / diagnostics item. To add one, add ONE row: the next
  * id, and a trailing `\` on every row but the last. The MCB then sends one more value
- * per row (ActuatorState.values, Diagnostics.items). A value is a raw integer in units
- * of 10^-decimals `unit`: ELEVATION 2500 with 1 decimal and "mm" is 250.0 mm.
- * Display names for the rows are each device's own.
+ * per row (ActuatorState.values, Diagnostics.items). `short` and `label` are the names
+ * every device uses for the row. A value is a raw integer in units of 10^-decimals
+ * `unit`: ELEVATION 2500 with 1 decimal and "mm" is 250.0 mm.
  * ---------------------------------------------------------------------- */
 
-/* X(id, NAME, min, max, step, decimals, unit) */
+/* X(id, NAME, short, label, min, max, step, decimals, unit) */
 #define RAMMP_ACTUATOR_TABLE(X)                                                                    \
-  X(0, ELEVATION, 0, 2500, 50, 1, "mm")                                                            \
-  X(1, REAR_TILT, 0, 900, 25, 1, "deg")                                                            \
-  X(2, FORWARD_TILT, 0, 450, 25, 1, "deg")                                                         \
-  X(3, SIDE_TILT, -300, 300, 25, 1, "deg")
+  X(0, ELEVATION, "M1", "Elevation", 0, 2500, 50, 1, "mm")                                         \
+  X(1, REAR_TILT, "M2", "Rear Tilt", 0, 900, 25, 1, "deg")                                         \
+  X(2, FORWARD_TILT, "M3", "Forward Tilt", 0, 450, 25, 1, "deg")                                   \
+  X(3, SIDE_TILT, "M4", "Side Tilt", -300, 300, 25, 1, "deg")
 
-/* D(id, NAME, unit1, dec1, unit2, dec2, unit3, dec3); a unit "" = reading unused */
+/* D(id, NAME, short, label, unit1, dec1, unit2, dec2, unit3, dec3); a unit "" = unused */
 #define RAMMP_DIAG_TABLE(D)                                                                        \
-  D(0, TEST_1, "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)                                    \
-  D(1, TEST_2, "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)                                    \
-  D(2, TEST_3, "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)
+  D(0, TEST_1, "T1", "Test actuator 1", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
+  D(1, TEST_2, "T2", "Test actuator 2", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
+  D(2, TEST_3, "T3", "Test actuator 3", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)
 
 /* Generated from the tables: the ids (ActuatorId::ELEVATION = 0, ...) and the rows. */
 
@@ -118,16 +117,18 @@ enum class ActuatorId : uint8_t {
 
 struct ActuatorSpec {
   ActuatorId id;
-  int32_t min_value; /**< raw units */
-  int32_t max_value; /**< raw units */
-  int32_t step;      /**< raw units moved per ActuatorCommand step */
-  uint8_t decimals;  /**< raw units are 10^-decimals `unit` */
-  const char *unit;  /**< "mm" */
+  const char *short_name; /**< "M1" */
+  const char *label;      /**< "Elevation" */
+  int32_t min_value;      /**< raw units */
+  int32_t max_value;      /**< raw units */
+  int32_t step;           /**< raw units moved per ActuatorCommand step */
+  uint8_t decimals;       /**< raw units are 10^-decimals `unit` */
+  const char *unit;       /**< "mm" */
 };
 
 inline constexpr std::array kActuators{
-#define RAMMP_ACTUATOR_ROW(id_, name_, min_, max_, step_, dec_, unit_)                             \
-  ActuatorSpec{ActuatorId::name_, min_, max_, step_, dec_, unit_},
+#define RAMMP_ACTUATOR_ROW(id_, name_, short_, label_, min_, max_, step_, dec_, unit_)             \
+  ActuatorSpec{ActuatorId::name_, short_, label_, min_, max_, step_, dec_, unit_},
     RAMMP_ACTUATOR_TABLE(RAMMP_ACTUATOR_ROW)
 #undef RAMMP_ACTUATOR_ROW
 };
@@ -143,13 +144,15 @@ inline constexpr size_t kDiagFields = 3; /**< readings per diagnostics item */
 
 struct DiagSpec {
   DiagId id;
+  const char *short_name;                     /**< "T1" */
+  const char *label;                          /**< "Test actuator 1" */
   std::array<const char *, kDiagFields> unit; /**< "Temp [C]"; "" = reading unused */
   std::array<uint8_t, kDiagFields> decimals;  /**< raw readings are 10^-decimals unit */
 };
 
 inline constexpr std::array kDiagItems{
-#define RAMMP_DIAG_ROW(id_, name_, u1_, d1_, u2_, d2_, u3_, d3_)                                   \
-  DiagSpec{DiagId::name_, {u1_, u2_, u3_}, {d1_, d2_, d3_}},
+#define RAMMP_DIAG_ROW(id_, name_, short_, label_, u1_, d1_, u2_, d2_, u3_, d3_)                   \
+  DiagSpec{DiagId::name_, short_, label_, {u1_, u2_, u3_}, {d1_, d2_, d3_}},
     RAMMP_DIAG_TABLE(RAMMP_DIAG_ROW)
 #undef RAMMP_DIAG_ROW
 };
