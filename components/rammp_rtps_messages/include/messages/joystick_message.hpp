@@ -44,6 +44,8 @@
 #include <string>
 #include <vector>
 
+#include "topic.hpp"
+
 /* -------------------------------------------------------------------------
  * Topics and types: rammp/<publisher>/<message> and rammp/msg/<Message>.
  * ---------------------------------------------------------------------- */
@@ -63,12 +65,6 @@
 #define RAMMP_TYPE_DIAGNOSTICS "rammp/msg/Diagnostics"
 
 namespace rammp {
-
-/** A DDS topic and type name, tied to the message it carries. */
-template <class Message> struct Topic {
-  const char *name; /**< DDS topic name */
-  const char *type; /**< DDS type name */
-};
 
 struct XYTwist;
 struct ActuatorCommand;
