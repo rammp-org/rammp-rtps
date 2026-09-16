@@ -177,6 +177,7 @@ enum class FaultCode : uint8_t {
   DRV_FAULT = 6,       /**< any other gate-driver fault; see drv_status */
   UNASSIGNED_AXIS = 7, /**< AxisId::UNASSIGNED in NVS. The board has no topic to publish
                             on, so this shows on its console. */
+  SAMPLER = 8,         /**< current sampling fell behind its budget and disabled itself */
 };
 
 /** One axis's state, published at 20 Hz. Byte fields first, then 16-bit, 32-bit, floats:
