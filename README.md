@@ -9,6 +9,11 @@ and types in this repository, then consume this repository as a submodule.
 
 - [`components/rammp_rtps_messages`](./components/rammp_rtps_messages): shared
   RTPS message topics, type names, constants, enums, and payload structs.
+  - `messages/topic.hpp`: `Topic<Message>`, the typed topic/type handle every
+    message header uses.
+  - `messages/joystick_message.hpp`: joystick <-> MCB.
+  - `messages/motor_message.hpp`: MIB <-> PACE RACER motor controllers, one
+    topic pair per axis from `RAMMP_AXIS_TABLE`.
 - [`components/rammp_rtps_actions`](./components/rammp_rtps_actions): shared
   RTPS action definitions.
 - [`components/rammp_rtps_services`](./components/rammp_rtps_services): shared
@@ -18,9 +23,9 @@ and types in this repository, then consume this repository as a submodule.
 
 ## Add a new RTPS topic and type
 
-1. Add the message `struct` in
-  `components/rammp_rtps_messages/include/messages/joystick_message.hpp` (C++20; the
-  struct is the XCDR1 wire layout, fields in order).
+1. Add the message `struct` to the header for its publisher/subscriber pair under
+  `components/rammp_rtps_messages/include/messages/` (C++20; the struct is the
+  XCDR1 wire layout, fields in order), and include that header from `messages.hpp`.
 2. Give its enums a fixed wire width: `enum class X : uint8_t` (no plain enums).
 3. Name it with the pattern, in the "Topics and types" block at the top:
   `#define RAMMP_TOPIC_<PUBLISHER>_<MESSAGE> "rammp/<publisher>/<message>"`,
