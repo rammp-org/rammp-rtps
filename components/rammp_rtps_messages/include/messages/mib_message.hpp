@@ -59,9 +59,6 @@ struct seatState{
 /** Message type identifier associated with the MIB status topic. */
 #define RAMMP_TYPE_MIB_STATUS "rammp/msg/MibStatus"
 
-/** speed_tenths is 0..99, i.e. 0.0 .. 9.9 in the displayed unit. */
-inline constexpr uint8_t kSpeedMaxTenths = 99;
-
 /**
  * @brief Status message published by the MIB.
  *
@@ -69,18 +66,26 @@ inline constexpr uint8_t kSpeedMaxTenths = 99;
  * the TopBar clock (and the RTC it keeps across reboots), the wording for the
  * state label, and the second line of the error banner. They are appended, so a
  * decoder that reads only the first four fields still reads them correctly.
+ *
+ * Real quantities, not display units: speed is metres per second and the clock is
+ * Unix time, both device-neutral. A joystick showing mph at one decimal converts
+ * at its own edge, the way it already does for currentSeatState.
+ *
+ * The clock is UTC and carries its offset separately, so epoch_s is an ordinary
+ * Unix timestamp that nothing has to second-guess; a screen showing the wall
+ * clock adds utc_offset_min itself.
  */
 struct MibStatus {
     MibSystemState systemState{MibSystemState::INITIALIZING}; /**< Current system state. */
     DriveProfile activeProfile{DriveProfile::NORMAL};         /**< Currently selected drive profile. */
     seatState currentSeatState{};                             /**< Current seat position and orientation. */
     std::string error_message{"No error"};                    /**< Human-readable error description. */
-    uint8_t seq{0};                        /**< +1 per message, wraps. */
-    uint8_t speed_tenths{0};               /**< 0..kSpeedMaxTenths. */
-    uint8_t hour{0}, minute{0}, second{0}; /**< MIB local time. */
-    uint8_t day{0}, month{0}, year{0};     /**< month 0 = time unknown; year since 2000. */
-    std::string status_text{};             /**< Optional wording for the state label; "" = use the enum's name. */
-    std::string error_footer{};            /**< What to do about error_message, shown under it. */
+    int64_t epoch_s{0};        /**< Unix time, seconds since 1970-01-01 UTC; 0 = clock not known. */
+    float speed{0.0f};         /**< Ground speed, metres per second. */
+    int16_t utc_offset_min{0}; /**< Minutes east of UTC, to turn epoch_s into local wall time. */
+    uint8_t seq{0};            /**< +1 per message, wraps; a gap is a dropped sample. */
+    std::string status_text{}; /**< Optional wording for the state label; "" = use the enum's name. */
+    std::string error_footer{}; /**< What to do about error_message, shown under it. */
 };
 
 /** The MIB's status topic, typed. */
