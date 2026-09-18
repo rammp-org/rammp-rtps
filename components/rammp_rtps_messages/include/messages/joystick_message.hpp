@@ -11,27 +11,31 @@
  * - IDL: uint8_t = octet, int8_t = int8, int32_t = long, uint32_t = unsigned long,
  *   float = float, std::string = string, std::vector<T> = sequence<T>; an enum is its width.
  * - Best-effort, no durability: state is resent periodically.
+ * - The joystick asks, the MCB decides: a command is a request, and the joystick shows
+ *   nothing until the matching state message says it happened.
  *
  * Naming, for every message:
- *   struct <Message>                    XYTwist
- *   RAMMP_TYPE_<MESSAGE>                RAMMP_TYPE_XY_TWIST            "rammp/msg/XYTwist"
- *   RAMMP_TOPIC_<PUBLISHER>_<MESSAGE>   RAMMP_TOPIC_JOYSTICK_XY_TWIST  "rammp/joystick/xy_twist"
- *   k<Publisher><Message>               kJoystickXYTwist               the typed Topic<XYTwist>
+ *   struct <Message>                    SeatCommand
+ *   RAMMP_TYPE_<MESSAGE>                RAMMP_TYPE_SEAT_COMMAND  "rammp/msg/SeatCommand"
+ *   RAMMP_TOPIC_<PUBLISHER>_<MESSAGE>   RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND
+ *   k<Publisher><Message>               kJoystickSeatCommand     the typed Topic<>
  *
- * Contents: Topics and types, Tables (actuators, diagnostics), Messages.
+ * Contents: Topics and types, Tables (seat axes, diagnostics), Messages.
  *
- * Example (espp, `rtps` a started espp::RtpsParticipant): an MCB publishing Diagnostics
- * and taking the joystick's actuator requests
+ * The MIB's own state - what the chair is doing, where the seat is - is MIB::MibStatus
+ * in messages/mib_message.hpp, which this header includes for MIB::DriveProfile.
  *
- *   espp::Publisher<rammp::Diagnostics> diag_pub(
- *       rtps, {.topic = rammp::kMcbDiagnostics.name, .type_name = rammp::kMcbDiagnostics.type});
- *   diag_pub.publish({.seq = seq++, .items = {{.values = {305, 150, 450}}}});
+ * Example (espp, `rtps` a started espp::RtpsParticipant): a MIB taking the joystick's
+ * seat requests and answering with its status
  *
- *   espp::Subscriber<rammp::ActuatorCommand> cmd_sub(
- *       rtps, {.topic = rammp::kJoystickActuatorCommand.name,
- *              .type_name = rammp::kJoystickActuatorCommand.type,
- *              .on_message = [](const rammp::ActuatorCommand &cmd) {
- *                move_actuator(cmd.actuator_id, cmd.steps); // then publish an ActuatorState
+ *   espp::Publisher<MIB::MibStatus> status_pub(
+ *       rtps, {.topic = MIB::kMibStatus.name, .type_name = MIB::kMibStatus.type});
+ *
+ *   espp::Subscriber<rammp::SeatCommand> seat_sub(
+ *       rtps, {.topic = rammp::kJoystickSeatCommand.name,
+ *              .type_name = rammp::kJoystickSeatCommand.type,
+ *              .on_message = [](const rammp::SeatCommand &cmd) {
+ *                move_seat(cmd.axis, cmd.target); // clamp to the axis' range, then publish
  *              }});
  */
 
@@ -44,7 +48,8 @@
 #include <string>
 #include <vector>
 
-#include "topic.hpp"
+#include "messages/mib_message.hpp" /* MIB::DriveProfile, and MibStatus for the topic list */
+#include "messages/topic.hpp"
 
 /* -------------------------------------------------------------------------
  * Topics and types: rammp/<publisher>/<message> and rammp/msg/<Message>.
@@ -53,49 +58,51 @@
 /* joystick -> MCB */
 #define RAMMP_TOPIC_JOYSTICK_XY_TWIST "rammp/joystick/xy_twist"
 #define RAMMP_TYPE_XY_TWIST "rammp/msg/XYTwist"
-#define RAMMP_TOPIC_JOYSTICK_ACTUATOR_COMMAND "rammp/joystick/actuator_command"
-#define RAMMP_TYPE_ACTUATOR_COMMAND "rammp/msg/ActuatorCommand"
+#define RAMMP_TOPIC_JOYSTICK_DRIVE_COMMAND "rammp/joystick/drive_command"
+#define RAMMP_TYPE_DRIVE_COMMAND "rammp/msg/DriveCommand"
+#define RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND "rammp/joystick/seat_command"
+#define RAMMP_TYPE_SEAT_COMMAND "rammp/msg/SeatCommand"
 
-/* MCB -> joystick */
-#define RAMMP_TOPIC_MCB_STATUS "rammp/mcb/status"
-#define RAMMP_TYPE_MCB_STATUS "rammp/msg/McbStatus"
-#define RAMMP_TOPIC_MCB_ACTUATOR_STATE "rammp/mcb/actuator_state"
-#define RAMMP_TYPE_ACTUATOR_STATE "rammp/msg/ActuatorState"
+/* MCB -> joystick. The state of the chair itself is RAMMP_TOPIC_MIB_STATUS, in
+   messages/mib_message.hpp. */
 #define RAMMP_TOPIC_MCB_DIAGNOSTICS "rammp/mcb/diagnostics"
 #define RAMMP_TYPE_DIAGNOSTICS "rammp/msg/Diagnostics"
 
 namespace rammp {
 
+/* Topic<Message> is in messages/topic.hpp: the MIB's status topic needs it too. */
+
 struct XYTwist;
-struct ActuatorCommand;
-struct McbStatus;
-struct ActuatorState;
+struct DriveCommand;
+struct SeatCommand;
 struct Diagnostics;
 
 inline constexpr Topic<XYTwist> kJoystickXYTwist{RAMMP_TOPIC_JOYSTICK_XY_TWIST,
                                                  RAMMP_TYPE_XY_TWIST};
-inline constexpr Topic<ActuatorCommand> kJoystickActuatorCommand{
-    RAMMP_TOPIC_JOYSTICK_ACTUATOR_COMMAND, RAMMP_TYPE_ACTUATOR_COMMAND};
-inline constexpr Topic<McbStatus> kMcbStatus{RAMMP_TOPIC_MCB_STATUS, RAMMP_TYPE_MCB_STATUS};
-inline constexpr Topic<ActuatorState> kMcbActuatorState{RAMMP_TOPIC_MCB_ACTUATOR_STATE,
-                                                        RAMMP_TYPE_ACTUATOR_STATE};
+inline constexpr Topic<DriveCommand> kJoystickDriveCommand{RAMMP_TOPIC_JOYSTICK_DRIVE_COMMAND,
+                                                           RAMMP_TYPE_DRIVE_COMMAND};
+inline constexpr Topic<SeatCommand> kJoystickSeatCommand{RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND,
+                                                         RAMMP_TYPE_SEAT_COMMAND};
 inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
                                                     RAMMP_TYPE_DIAGNOSTICS};
 
 /* -------------------------------------------------------------------------
- * Tables: one row per actuator / diagnostics item. To add one, add ONE row: the next
+ * Tables: one row per seat axis / diagnostics item. To add one, add ONE row: the next
  * id, and a trailing `\` on every row but the last. The MCB then sends one more value
- * per row (ActuatorState.values, Diagnostics.items). `short` and `label` are the names
+ * per row (the matching MIB::seatState field, Diagnostics.items). `short` and `label` are the names
  * every device uses for the row. A value is a raw integer in units of 10^-decimals
  * `unit`: ELEVATION 2500 with 1 decimal and "mm" is 250.0 mm.
  * ---------------------------------------------------------------------- */
 
-/* X(id, NAME, short, label, min, max, step, decimals, unit) */
-#define RAMMP_ACTUATOR_TABLE(X)                                                                    \
-  X(0, ELEVATION, "M1", "Elevation", 0, 2500, 50, 1, "mm")                                         \
-  X(1, REAR_TILT, "M2", "Rear Tilt", 0, 900, 25, 1, "deg")                                         \
-  X(2, FORWARD_TILT, "M3", "Forward Tilt", 0, 450, 25, 1, "deg")                                   \
-  X(3, SIDE_TILT, "M4", "Side Tilt", -300, 300, 25, 1, "deg")
+/* X(id, NAME, short, label, min, max, step, decimals, unit)
+   One row per field of MIB::seatState, in that struct's order: the id indexes both.
+   Ranges are raw integers in units of 10^-decimals `unit`; the wire carries the same
+   quantity as a float in whole units, so raw 2500 with 1 decimal is 250.0 mm. */
+#define RAMMP_SEAT_AXIS_TABLE(X)                                                                   \
+  X(0, FRONT_BACK_TILT, "M1", "FB Tilt", -450, 900, 25, 1, "deg")                                  \
+  X(1, LATERAL_TILT, "M2", "Side Tilt", -300, 300, 25, 1, "deg")                                   \
+  X(2, ELEVATION, "M3", "Elevation", 0, 2500, 50, 1, "mm")                                         \
+  X(3, TRANSLATION, "M4", "Translation", 0, 500, 25, 1, "mm")
 
 /* D(id, NAME, short, label, unit1, dec1, unit2, dec2, unit3, dec3); a unit "" = unused */
 #define RAMMP_DIAG_TABLE(D)                                                                        \
@@ -103,32 +110,32 @@ inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
   D(1, TEST_2, "T2", "Test actuator 2", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
   D(2, TEST_3, "T3", "Test actuator 3", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)
 
-/* Generated from the tables: the ids (ActuatorId::ELEVATION = 0, ...) and the rows. */
+/* Generated from the tables: the ids (SeatAxis::ELEVATION = 0, ...) and the rows. */
 
-enum class ActuatorId : uint8_t {
-#define RAMMP_ACTUATOR_ID(id_, name_, ...) name_ = id_,
-  RAMMP_ACTUATOR_TABLE(RAMMP_ACTUATOR_ID)
-#undef RAMMP_ACTUATOR_ID
+enum class SeatAxis : uint8_t {
+#define RAMMP_SEAT_AXIS_ID(id_, name_, ...) name_ = id_,
+  RAMMP_SEAT_AXIS_TABLE(RAMMP_SEAT_AXIS_ID)
+#undef RAMMP_SEAT_AXIS_ID
 };
 
-struct ActuatorSpec {
-  ActuatorId id;
+struct SeatAxisSpec {
+  SeatAxis id;
   const char *short_name; /**< "M1" */
   const char *label;      /**< "Elevation" */
   int32_t min_value;      /**< raw units */
   int32_t max_value;      /**< raw units */
-  int32_t step;           /**< raw units moved per ActuatorCommand step */
+  int32_t step;           /**< raw units per step the joystick asks for */
   uint8_t decimals;       /**< raw units are 10^-decimals `unit` */
   const char *unit;       /**< "mm" */
 };
 
-inline constexpr std::array kActuators{
-#define RAMMP_ACTUATOR_ROW(id_, name_, short_, label_, min_, max_, step_, dec_, unit_)             \
-  ActuatorSpec{ActuatorId::name_, short_, label_, min_, max_, step_, dec_, unit_},
-    RAMMP_ACTUATOR_TABLE(RAMMP_ACTUATOR_ROW)
-#undef RAMMP_ACTUATOR_ROW
+inline constexpr std::array kSeatAxes{
+#define RAMMP_SEAT_AXIS_ROW(id_, name_, short_, label_, min_, max_, step_, dec_, unit_)            \
+  SeatAxisSpec{SeatAxis::name_, short_, label_, min_, max_, step_, dec_, unit_},
+    RAMMP_SEAT_AXIS_TABLE(RAMMP_SEAT_AXIS_ROW)
+#undef RAMMP_SEAT_AXIS_ROW
 };
-inline constexpr size_t kActuatorCount = kActuators.size();
+inline constexpr size_t kSeatAxisCount = kSeatAxes.size();
 
 enum class DiagId : uint8_t {
 #define RAMMP_DIAG_ID(id_, name_, ...) name_ = id_,
@@ -164,76 +171,40 @@ enum class Buttons : uint32_t {
   JOYSTICK = 0x1, /**< the stick's button */
 };
 
-enum class DriveMode : uint32_t {
-  NORMAL = 0, /**< car-like: Y drives, X steers */
-  HOLO = 1,   /**< holonomic: X/Y is the velocity vector */
-  AUTO = 2,   /**< reserved, not implemented */
-};
-
 /** The stick, calibrated on the joystick: 0 at rest, deadzones applied, X/Y within the
-    unit circle. Twist always rotates in place. */
+    unit circle. Twist always rotates in place. Sent continuously; the MCB drives on it
+    only while it has enabled driving (see DriveCommand). */
 struct XYTwist {
-  float x;              /**< -1..+1, + = right */
-  float y;              /**< -1..+1, + = forward */
-  float twist;          /**< -1..+1, + = clockwise */
-  Buttons buttons;      /**< pressed buttons */
-  DriveMode drive_mode; /**< chosen on the joystick */
+  float x;         /**< -1..+1, + = right */
+  float y;         /**< -1..+1, + = forward */
+  float twist;     /**< -1..+1, + = clockwise */
+  Buttons buttons; /**< pressed buttons */
 };
 
-/** Move one actuator by `steps` of its table step. The MCB answers with an ActuatorState. */
-struct ActuatorCommand {
-  uint8_t req_id;         /**< +1 per command, wraps; echoed back in ActuatorState */
-  ActuatorId actuator_id; /**< which actuator */
-  int8_t steps;           /**< -1 = one step down, +1 = one step up */
+enum class DriveRequest : uint8_t {
+  DISABLE = 0, /**< stop driving on the stick */
+  ENABLE = 1,  /**< drive on the stick */
+};
+
+/** Ask the MIB to enable or disable driving, with the profile to drive with. Sent on
+    change; the joystick shows driving only once MibStatus says ENABLED. The profile is
+    MIB::DriveProfile, the one the MIB reports back in MibStatus.activeProfile. */
+struct DriveCommand {
+  DriveRequest request;      /**< enable or disable */
+  MIB::DriveProfile profile; /**< which profile to drive with */
+};
+
+/** Ask the MIB to put one seat axis at `target`. Absolute, so a lost or repeated
+    message cannot drift the seat; the MIB clamps to the axis' min/max. The target is in
+    whole units (degrees, millimetres), matching the MIB::seatState field it moves. */
+struct SeatCommand {
+  SeatAxis axis; /**< which axis to move */
+  float target;  /**< where to put it, in the axis' unit */
 };
 
 /* -------------------------------------------------------------------------
  * Messages: MCB -> joystick (the MCB owns the state and resends it, changed or not)
  * ---------------------------------------------------------------------- */
-
-enum class DriveStatus : uint8_t {
-  INACTIVE = 0, /**< chair ignores the stick */
-  ACTIVE = 1,   /**< chair drives on the stick */
-};
-
-enum class SystemState : uint8_t {
-  OK = 0,    /**< drive and seat allowed */
-  ERROR = 1, /**< a fault: drive and seat not allowed; error_text says why */
-};
-
-inline constexpr uint8_t kSpeedMaxTenths = 99; /**< speed_tenths is 0..99 (0.0..9.9) */
-
-/** Drive status, system state, speed, clock and texts. */
-struct McbStatus {
-  DriveStatus drive_status;     /**< what the chair does with the stick */
-  SystemState system_state;     /**< OK, or a fault */
-  uint8_t flags;                /**< reserved, send 0 */
-  uint8_t seq;                  /**< +1 per message, wraps */
-  uint8_t speed_tenths;         /**< 0..kSpeedMaxTenths */
-  uint8_t hour, minute, second; /**< MCB local time */
-  uint8_t day, month, year;     /**< month 0 = time unknown; year since 2000 */
-  std::string drive_text;       /**< optional wording for drive_status; "" = none */
-  std::string state_text;       /**< optional wording for system_state; "" = none */
-  std::string error_text;       /**< what the fault is, while system_state != OK */
-  std::string error_footer;     /**< what to do about it */
-};
-
-/** The MCB's verdict on a command. Anything but OK = value unchanged. */
-enum class ActuatorResult : uint8_t {
-  OK = 0,         /**< moved */
-  AT_MIN = 1,     /**< already at its low end */
-  AT_MAX = 2,     /**< already at its high end */
-  INHIBITED = 3,  /**< refused now: interlock, fault, driving */
-  UNKNOWN_ID = 4, /**< no such actuator */
-};
-
-/** Every actuator's position, on change and periodically. */
-struct ActuatorState {
-  uint8_t req_id;              /**< command this answers; 0 = none yet */
-  ActuatorResult result;       /**< verdict on that command */
-  uint8_t seq;                 /**< +1 per message, wraps */
-  std::vector<int32_t> values; /**< one per RAMMP_ACTUATOR_TABLE row, raw units */
-};
 
 struct DiagItem {
   std::vector<int32_t> values; /**< raw readings, in RAMMP_DIAG_TABLE unit order */
