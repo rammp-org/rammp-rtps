@@ -4,6 +4,8 @@
  * The MIB commands each wheel's PACE RACER board; each board reports its state. Both sides
  * use this header. Only what both must agree on lives here; controller tuning, limit
  * ceilings and telemetry timing are the board's own.
+ * The behaviour behind these types (state machine, limits, faults, what a MIB
+ * can and cannot do) is docs/RACER-MOTOR-API.md.
  *
  * - C++20. Each struct IS the wire layout: XCDR1, fields in declaration order.
  * - Best-effort, no durability. Both messages are state, resent periodically; the next
