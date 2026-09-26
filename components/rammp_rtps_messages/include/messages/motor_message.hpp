@@ -4,6 +4,8 @@
  * The MIB commands each wheel's PACE RACER board; each board reports its state. Both sides
  * use this header. Only what both must agree on lives here; controller tuning, limit
  * ceilings and telemetry timing are the board's own.
+ * The behaviour behind these types (state machine, limits, faults, what a MIB
+ * can and cannot do) is docs/RACER-MOTOR-API.md.
  *
  * - C++20. Each struct IS the wire layout: XCDR1, fields in declaration order.
  * - Best-effort, no durability. Both messages are state, resent periodically; the next
@@ -151,7 +153,9 @@ struct MotorCommand {
   float torque;                   /**< N.m at the shaft           (TORQUE) */
   float torque_limit;             /**< N.m;     0 = the board's hard ceiling */
   float vel_limit;                /**< rad/s;   0 = the board's hard ceiling */
-  float accel_limit;              /**< rad/s^2; 0 = no ramp, the reference steps */
+  float accel_limit;              /**< rad/s^2; 0 = no ramp, the reference steps. A board
+                                       profile may set an accel ceiling; there 0 or more
+                                       than the ceiling means the ceiling */
 };
 
 /* -------------------------------------------------------------------------
@@ -178,6 +182,10 @@ enum class FaultCode : uint8_t {
   UNASSIGNED_AXIS = 7, /**< AxisId::UNASSIGNED in NVS. The board has no topic to publish
                             on, so this shows on its console. */
   SAMPLER = 8,         /**< current sampling fell behind its budget and disabled itself */
+  HALL = 9,            /**< hall inputs read an illegal state (000/111) while driving: a
+                            sensor line is open, shorted or unpowered */
+  STALL = 10,          /**< driven at the torque cap with no motion for 0.5 s: a blocked
+                            wheel, or feedback that has stopped reporting motion */
 };
 
 /** One axis's state, published at 20 Hz. Byte fields first, then 16-bit, 32-bit, floats:
