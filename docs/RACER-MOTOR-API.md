@@ -68,8 +68,8 @@ Two things the MIB should assert on every `MotorState`:
 - `cmd_age_ms < 100`. It reads 20 to 50 ms on a healthy stream; 65535 means the
   board has never heard from you.
 
-Record every `MotorState`. At 80 bytes and 20 Hz a wheel is 1.6 kB/s, and every
-incident becomes a replay instead of a guess.
+Record every `MotorState`. At 80 bytes and 20 Hz a wheel is 1.6 kB/s, and an
+incident with a recording is a replay.
 
 ## MotorCommand
 
@@ -134,9 +134,8 @@ stateDiagram-v2
 | `ESTOP` | anything | Hi-Z now, and for as long as you keep requesting it |
 | nothing for 200 ms | ARMED | the SAFE_STOP path, then `FAULT(WATCHDOG)` while still holding |
 
-Two consequences worth designing around. A chair that loses its MIB ends up
-held, not rolling. And SAFE_STOP is not a pause: to move again you request
-ARMED, which is allowed from HOLDING.
+Two consequences. A chair that loses its MIB ends up held. SAFE_STOP is a
+stop, and ARMED is allowed from HOLDING, so resuming is one request away.
 
 ## Faults and how to clear them
 
@@ -204,11 +203,11 @@ nothing on the network can raise them; the integration team owns them.
 | `flatbot` | NineBot S on the office rover | 60 rpm (6.28 rad/s) | 10 A (6 N.m) | 120 rpm/s (12.6 rad/s^2) |
 | `hub20` | ZLtech hub on rammp 1.5 | 180 rpm | 22 A | none |
 
-The flatbot numbers are a starting point, not a spec. The intended workflow:
-characterize the robot with them, decide what is safe for it, edit the
-profile, reflash, and only then tune feel with the per-command limits from
-the MIB. Per-command limits can only tighten a ceiling, so tuning from the
-MIB can never make the robot faster or stronger than its profile.
+The flatbot numbers are a starting point. The integration team characterizes
+the robot with them, decides what is safe for it, edits the profile, and
+reflashes. Feel is then tuned from the MIB with the per-command limits, which
+can only tighten a ceiling, so tuning from the MIB cannot make the robot
+faster or stronger than its profile.
 
 ## What you cannot do
 
@@ -246,8 +245,8 @@ Two findings from the bench that the MIB should design around:
 - A switch with IGMP snooping and no querier forwarded the host's multicast to
   the board but not the board's to the host, so SPDP discovery failed one way
   and everything looked dead. The MIB is the DHCP server and knows every
-  board's address from its lease table; discovering boards by unicast from
-  that table is the robust design.
+  board's address from its lease table. Discover boards by unicast from that
+  table instead of relying on multicast.
 - espp on the board keeps the reader proxy of every host participant it ever
   matched, and they do not expire. Each MIB restart adds one more copy of every
   `MotorState` the board sends, and the proxy table is fixed size. This needs a

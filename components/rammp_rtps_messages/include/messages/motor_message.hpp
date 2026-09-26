@@ -153,7 +153,9 @@ struct MotorCommand {
   float torque;                   /**< N.m at the shaft           (TORQUE) */
   float torque_limit;             /**< N.m;     0 = the board's hard ceiling */
   float vel_limit;                /**< rad/s;   0 = the board's hard ceiling */
-  float accel_limit;              /**< rad/s^2; 0 = no ramp, the reference steps */
+  float accel_limit;              /**< rad/s^2; 0 = no ramp, the reference steps. A board
+                                       profile may set an accel ceiling; there 0 or more
+                                       than the ceiling means the ceiling */
 };
 
 /* -------------------------------------------------------------------------
