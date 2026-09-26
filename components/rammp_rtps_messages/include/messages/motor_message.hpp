@@ -178,6 +178,10 @@ enum class FaultCode : uint8_t {
   UNASSIGNED_AXIS = 7, /**< AxisId::UNASSIGNED in NVS. The board has no topic to publish
                             on, so this shows on its console. */
   SAMPLER = 8,         /**< current sampling fell behind its budget and disabled itself */
+  HALL = 9,            /**< hall inputs read an illegal state (000/111) while driving: a
+                            sensor line is open, shorted or unpowered */
+  STALL = 10,          /**< driven at the torque cap with no motion for 0.5 s: a blocked
+                            wheel, or feedback that has stopped reporting motion */
 };
 
 /** One axis's state, published at 20 Hz. Byte fields first, then 16-bit, 32-bit, floats:
