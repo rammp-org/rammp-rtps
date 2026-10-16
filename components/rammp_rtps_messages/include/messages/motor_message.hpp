@@ -20,11 +20,14 @@
  * Naming:
  *   RAMMP_TYPE_MOTOR_COMMAND                  "rammp/msg/MotorCommand"
  *   RAMMP_TYPE_MOTOR_STATE                    "rammp/msg/MotorState"
+ *   RAMMP_TYPE_MOTOR_TUNING                   "rammp/msg/MotorTuning"
  *   RAMMP_TOPIC_MIB_MOTOR_COMMAND(segment)    "rammp/mib/motor_command/<axis>"   MIB -> board
  *   RAMMP_TOPIC_MOTOR_STATE(segment)          "rammp/<axis>/motor_state"         board -> MIB
- *   kAxes[i].command / kAxes[i].state         the typed Topic<> pair for axis i
+ *   RAMMP_TOPIC_MIB_MOTOR_TUNING(segment)     "rammp/mib/motor_tuning/<axis>"    MIB -> board
+ *   kAxes[i].command / .state / .tuning       the typed Topic<> handles for axis i
  *
- * Contents: Version, Types, Axis table, MotorCommand (MIB -> board), MotorState (board -> MIB).
+ * Contents: Version, Types, Axis table, MotorCommand (MIB -> board), MotorTuning (MIB -> board),
+ * MotorState (board -> MIB).
  *
  * Example (espp, `rtps` a started espp::RtpsParticipant): the MIB driving the left wheel
  *
@@ -55,7 +58,7 @@
  * was built with in MotorState::api_version; a mismatch is the MIB's to refuse.
  * ---------------------------------------------------------------------- */
 
-#define RAMMP_MOTOR_API_VERSION 1
+#define RAMMP_MOTOR_API_VERSION 2
 
 /* -------------------------------------------------------------------------
  * Types: one type each way, shared by every axis.
@@ -63,11 +66,14 @@
 
 #define RAMMP_TYPE_MOTOR_COMMAND "rammp/msg/MotorCommand"
 #define RAMMP_TYPE_MOTOR_STATE "rammp/msg/MotorState"
+#define RAMMP_TYPE_MOTOR_TUNING "rammp/msg/MotorTuning"
 
 /** MIB -> board. `segment` is the axis's table segment, a string literal. */
 #define RAMMP_TOPIC_MIB_MOTOR_COMMAND(segment) "rammp/mib/motor_command/" segment
 /** board -> MIB. */
 #define RAMMP_TOPIC_MOTOR_STATE(segment) "rammp/" segment "/motor_state"
+/** MIB -> board, outer-loop gains. Occasional, not streamed. */
+#define RAMMP_TOPIC_MIB_MOTOR_TUNING(segment) "rammp/mib/motor_tuning/" segment
 
 namespace rammp {
 
@@ -94,6 +100,7 @@ enum class AxisId : uint8_t {
 
 struct MotorCommand;
 struct MotorState;
+struct MotorTuning;
 
 struct AxisSpec {
   AxisId id;
@@ -101,6 +108,7 @@ struct AxisSpec {
   const char *label;           /**< "Drive L" */
   Topic<MotorCommand> command; /**< MIB -> this axis */
   Topic<MotorState> state;     /**< this axis -> MIB */
+  Topic<MotorTuning> tuning;   /**< MIB -> this axis, gains */
 };
 
 inline constexpr std::array kAxes{
@@ -109,7 +117,8 @@ inline constexpr std::array kAxes{
            segment_,                                                                               \
            label_,                                                                                 \
            {RAMMP_TOPIC_MIB_MOTOR_COMMAND(segment_), RAMMP_TYPE_MOTOR_COMMAND},                    \
-           {RAMMP_TOPIC_MOTOR_STATE(segment_), RAMMP_TYPE_MOTOR_STATE}},
+           {RAMMP_TOPIC_MOTOR_STATE(segment_), RAMMP_TYPE_MOTOR_STATE},                            \
+           {RAMMP_TOPIC_MIB_MOTOR_TUNING(segment_), RAMMP_TYPE_MOTOR_TUNING}},
     RAMMP_AXIS_TABLE(RAMMP_AXIS_ROW)
 #undef RAMMP_AXIS_ROW
 };
@@ -158,6 +167,25 @@ struct MotorCommand {
                                        than the ceiling means the ceiling */
 };
 
+/** Outer-loop gains for one axis, applied live. The MIB sends it when a value changes and
+    may repeat it; the board acts on a NEW `tuning_req_id` only (the clear_fault_req_id
+    idiom) and echoes it as MotorState::tuning_ack, with the values in force. A gain of 0
+    means "leave as is". Every value is clamped to the board's compile-time range; read it
+    back from MotorState rather than assuming. The current loop, the limit ceilings and the
+    calibration are not here on purpose: those are the profile's and the console's.
+    With `persist` set the board also saves the values to NVS so they survive a power
+    cycle; without it they last until reboot, which is what you want while experimenting.
+    16 bytes on the wire. */
+struct MotorTuning {
+  uint8_t tuning_req_id; /**< +1 per request, wraps; a NEW value applies the message */
+  uint8_t persist;       /**< 1 = also save to NVS; 0 = until reboot */
+  uint8_t reserved0;     /**< send 0 */
+  uint8_t reserved1;     /**< send 0 */
+  float speed_kp;        /**< A per rad/s of velocity error; 0 = unchanged */
+  float speed_ki;        /**< A per rad of integrated velocity error; 0 = unchanged */
+  float hall_pll_hz;     /**< hall speed tracking-loop bandwidth, Hz; 0 = unchanged */
+};
+
 /* -------------------------------------------------------------------------
  * Messages: board -> MIB (the board owns its state and resends it, changed or not)
  * ---------------------------------------------------------------------- */
@@ -189,7 +217,7 @@ enum class FaultCode : uint8_t {
 };
 
 /** One axis's state, published at 20 Hz. Byte fields first, then 16-bit, 32-bit, floats:
-    XCDR1 aligns each field to its size, so this order pads 2 bytes. 80 bytes on the wire. */
+    XCDR1 aligns each field to its size, so this order pads 2 bytes. 92 bytes on the wire. */
 struct MotorState {
   uint8_t api_version;        /**< RAMMP_MOTOR_API_VERSION the board was built with */
   AxisId axis_id;             /**< which board this is */
@@ -200,7 +228,7 @@ struct MotorState {
   FaultCode fault_code;       /**< NONE unless state == FAULT */
   uint8_t clear_fault_ack;    /**< last clear_fault_req_id acted on; 0 = none yet */
   uint8_t vbus_measured;      /**< 0 = vbus is the board's compiled constant, 1 = measured */
-  uint8_t flags;              /**< reserved, send 0 */
+  uint8_t tuning_ack;         /**< last MotorTuning::tuning_req_id acted on; 0 = none yet */
   uint16_t cmd_age_ms;        /**< time since last_cmd_seq arrived; saturates at 65535 */
   uint16_t drv_status;        /**< raw DRV8353 fault bits, for diagnosis */
   uint32_t uptime_ms;         /**< board time since boot, wraps at 49.7 days */
@@ -216,6 +244,9 @@ struct MotorState {
   float vel_limit_eff;        /**< rad/s */
   float accel_limit_eff;      /**< rad/s^2; 0 = no ramp */
   std::array<float, 4> temps; /**< C, the four board sensors */
+  float speed_kp;             /**< A per rad/s, the speed-loop gain in force */
+  float speed_ki;             /**< A per rad, the speed-loop integral gain in force */
+  float hall_pll_hz;          /**< Hz, the hall tracking-loop bandwidth in force */
 };
 
 } // namespace rammp
