@@ -13,8 +13,10 @@ and types in this repository, then consume this repository as a submodule.
     message header uses.
   - `messages/joystick_message.hpp`: joystick <-> MCB.
   - `messages/mib_message.hpp`: the MIB's state, which the joystick draws.
-  - `messages/motor_message.hpp`: MIB <-> PACE RACER motor controllers, one
-    topic pair per axis from `RAMMP_AXIS_TABLE`.
+  - `messages/motor_message.hpp`: MIB <-> PACE RACER motor controllers, per
+    axis from `RAMMP_AXIS_TABLE`: command, state, and live speed-loop tuning
+    (API version 3: a negative gain sets it to exactly 0). How to use it:
+    [`docs/RACER-MOTOR-API.md`](./docs/RACER-MOTOR-API.md).
 - [`components/rammp_rtps_actions`](./components/rammp_rtps_actions): shared
   RTPS action definitions.
 - [`components/rammp_rtps_services`](./components/rammp_rtps_services): shared
