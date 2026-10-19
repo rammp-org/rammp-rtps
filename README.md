@@ -11,6 +11,7 @@ and types in this repository, then consume this repository as a submodule.
   RTPS message topics, type names, constants, enums, and payload structs.
   - `messages/topic.hpp`: `Topic<Message>`, the typed topic/type handle every
     message header uses.
+  - `messages/estop_message.hpp`: the robot-wide e-stop, any node <-> the MIB.
   - `messages/joystick_message.hpp`: joystick <-> MCB.
   - `messages/mib_message.hpp`: the MIB's state, which the joystick draws.
   - `messages/motor_message.hpp`: MIB <-> PACE RACER motor controllers, one
