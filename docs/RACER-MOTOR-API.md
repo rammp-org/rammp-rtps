@@ -11,6 +11,250 @@ NineBot S wheel, halls only, one board. The tuning topic (version 2,
 exercised on a wheel yet. The chair's two drive boards run version 2 firmware
 as of 2026-10-15. Not yet run with two boards or under load.
 
+## Quick start: drive both wheels from the MIB
+
+Copy this into a `main.cpp` on an ESP-IDF project that depends on `espp/rtps`
+and has this repository as a component (the MIB firmware already does both).
+It arms the two drive boards, streams a velocity to each at 20 Hz, checks that
+they obey, and safe-stops after five seconds. Everything below this section
+explains why each line is there.
+
+```cpp
+// main.cpp: the smallest MIB that drives drive_left and drive_right.
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <thread>
+
+#include "messages/motor_message.hpp"
+#include "rtps_participant.hpp"
+#include "rtps_pubsub.hpp"
+
+using namespace std::chrono_literals;
+
+namespace {
+
+// One wheel: a command publisher, a state subscriber, the last state heard.
+struct Wheel {
+  const rammp::AxisSpec &axis;
+  float sign; // +1 left, -1 right: forward is CCW on the left wheel only
+  espp::Publisher<rammp::MotorCommand> cmd;
+  espp::Subscriber<rammp::MotorState> state;
+  std::atomic<rammp::BoardState> board_state{rammp::BoardState::DISARMED};
+  std::atomic<rammp::FaultCode> fault{rammp::FaultCode::NONE};
+  std::atomic<uint16_t> cmd_age_ms{65535};
+  std::atomic<float> velocity{0.0f};
+
+  Wheel(espp::RtpsParticipant &part, rammp::AxisId id, float sign_)
+      : axis(rammp::axis(id)), sign(sign_),
+        cmd(part, {.topic = axis.command.name, .type_name = axis.command.type}),
+        state(part, {.topic = axis.state.name,
+                     .type_name = axis.state.type,
+                     .on_message =
+                         [this](const rammp::MotorState &s) {
+                           board_state = s.state;
+                           fault = s.fault_code;
+                           cmd_age_ms = s.cmd_age_ms;
+                           velocity = s.velocity;
+                         }}) {}
+
+  bool ok() const { return cmd.is_valid() && state.is_valid(); }
+
+  // Send the whole desired state. Call this every 50 ms, idle or not.
+  void send(uint8_t seq, rammp::RequestedState req, float forward_rad_s) {
+    rammp::MotorCommand c{};
+    c.seq = seq;
+    c.requested_state = req;
+    c.mode = rammp::ControlMode::VELOCITY;
+    c.velocity = sign * forward_rad_s;
+    c.torque_limit = 0.0f; // 0 = the board's profile ceiling
+    c.vel_limit = 0.0f;
+    c.accel_limit = 5.0f; // rad/s^2: always ramp; a step is the first cause of shaking
+    if (!cmd.publish(c))
+      printf("%s: publish failed (no matched reader yet?)\n", axis.label);
+  }
+
+  // The two checks the doc says to make on every MotorState.
+  bool obeying() const {
+    return board_state == rammp::BoardState::ARMED && cmd_age_ms < 100;
+  }
+};
+
+} // namespace
+
+extern "C" void app_main(void) {
+  // The MIB is the DHCP server for the boards, so its own address is fixed.
+  // On the real MIB this comes from the ethernet netif after link-up.
+  espp::RtpsParticipant part({.interface_address = "192.168.4.1"});
+  if (!part.start()) {
+    printf("rtps participant failed to start\n");
+    return;
+  }
+
+  Wheel left(part, rammp::AxisId::DRIVE_LEFT, +1.0f);
+  Wheel right(part, rammp::AxisId::DRIVE_RIGHT, -1.0f);
+  if (!left.ok() || !right.ok()) {
+    printf("endpoint registration failed\n");
+    return;
+  }
+
+  uint8_t seq = 0;
+  auto tick = [&](rammp::RequestedState req, float fwd_left, float fwd_right) {
+    ++seq;
+    left.send(seq, req, fwd_left);
+    right.send(seq, req, fwd_right);
+  };
+
+  // 1. Arm with zero velocity until both boards report ARMED (or give up).
+  for (int i = 0; i < 60 && !(left.obeying() && right.obeying()); ++i) {
+    tick(rammp::RequestedState::ARMED, 0.0f, 0.0f);
+    std::this_thread::sleep_for(50ms);
+  }
+  if (!left.obeying() || !right.obeying()) {
+    // A FAULT here is usually ENCODER (board not hcal'd) or UNASSIGNED_AXIS.
+    printf("not armed: left=%d fault=%d right=%d fault=%d\n", (int)left.board_state.load(),
+           (int)left.fault.load(), (int)right.board_state.load(), (int)right.fault.load());
+  }
+
+  // 2. Drive forward at 2 rad/s for 5 s, both wheels, re-sending every 50 ms.
+  for (int i = 0; i < 100; ++i) {
+    tick(rammp::RequestedState::ARMED, 2.0f, 2.0f);
+    if (i % 20 == 0)
+      printf("L %.2f rad/s  R %.2f rad/s  obeying L=%d R=%d\n", left.velocity.load(),
+             -right.velocity.load(), (int)left.obeying(), (int)right.obeying());
+    std::this_thread::sleep_for(50ms);
+  }
+
+  // 3. Stop under control and stay held. Keep streaming: silence is a WATCHDOG fault.
+  while (true) {
+    tick(rammp::RequestedState::SAFE_STOP, 0.0f, 0.0f);
+    std::this_thread::sleep_for(50ms);
+  }
+}
+```
+
+The ESP-IDF manifest it needs, `main/idf_component.yml`:
+
+```yaml
+dependencies:
+  espp/rtps: '>=1.3.3'
+  espp/cdr: '>=1.3'
+```
+
+and `main/CMakeLists.txt` must `REQUIRES rammp_rtps_interface` (or
+`rammp_rtps_messages`) with this repository under `components/` or
+`external/`. Turn the wheel the other way by negating the velocity; turn the
+chair by giving the two wheels different values.
+
+### Tuning the speed loop from scripts
+
+`MotorTuning` is a one-shot request, not a stream, so the natural tool is a
+script that sends it while something else keeps the command stream alive. The
+host MIB stand-in in `pace-racer-fw`, `tests/host_mib/mib_stub`, does exactly
+that: it streams `MotorCommand` at 20 Hz on its own and takes commands from
+stdin, so a tuning script is a here-doc. Build it once with the CMake in that
+directory; run it on a laptop plugged into the chair's switch, with the MIB
+off (two MIBs commanding one axis is a bad day). The first argument is the
+laptop's own address on that interface, not the board's.
+
+`tune.sh`, the generic one. Sends a gain set, drives a step, prints the
+reply once a second so you can read `tune ack=` and the gains in force:
+
+```bash
+#!/usr/bin/env bash
+# usage: ./tune.sh <laptop-ip> <axis> <kp A/(rad/s)> <ki A/rad> <pll Hz> [save]
+# 0 for any gain means "leave as is". 'save' writes to NVS.
+set -eu
+IP=$1; AXIS=$2; KP=$3; KI=$4; PLL=$5; SAVE=${6:-}
+./build/mib_stub "$IP" "$AXIS" <<SCRIPT
+tune $KP $KI $PLL $SAVE
+wait 1
+lim 0 0 5
+arm
+wait 1
+vel 2
+wait 3
+vel 0
+wait 2
+stop
+wait 1
+disarm
+q
+SCRIPT
+```
+
+Then follow the order in the Tuning section:
+
+```bash
+./tune.sh 192.168.4.10 drive_left 2.39 4.77 10     # the hall defaults
+./tune.sh 192.168.4.10 drive_left 2.39 2.4 10      # step 2: halve ki
+./tune.sh 192.168.4.10 drive_left 1.2 2.4 10       # step 3: halve kp
+./tune.sh 192.168.4.10 drive_left 1.2 2.4 5        # step 4: smoother feedback
+./tune.sh 192.168.4.10 drive_left 1.2 2.4 5 save   # keep it across reboots
+./tune.sh 192.168.4.10 drive_right 1.2 2.4 5 save  # the other wheel is its own board
+```
+
+`sweep_ki.sh`, for finding the edge. Holds `kp` and `pll`, steps `ki`, and
+records every `MotorState` so the runs can be compared after the fact:
+
+```bash
+#!/usr/bin/env bash
+# usage: ./sweep_ki.sh <laptop-ip> <axis> <kp> <pll>   -> logs/ki_<value>.log
+set -eu
+IP=$1; AXIS=$2; KP=$3; PLL=$4
+mkdir -p logs
+for KI in 1.0 2.0 3.0 4.77 6.0; do
+  echo "== ki=$KI"
+  ./build/mib_stub "$IP" "$AXIS" -v > "logs/ki_${KI}.log" <<SCRIPT
+tune $KP $KI $PLL
+wait 1
+lim 0 0 5
+arm
+wait 1
+vel 2
+wait 3
+vel 0
+wait 2
+stop
+wait 1
+disarm
+q
+SCRIPT
+  awk '/vel=/ { n++ } /fault=(STALL|OVERCURRENT|HALL)/ { f++ } END { printf "samples=%d faults=%d\n", n, f+0 }' \
+    "logs/ki_${KI}.log"
+done
+```
+
+Judge a run by `vel=` settling at 2 without overshoot in the log, and by the
+wheel not buzzing. If a run latches a fault, add `clr` then `arm` to the
+script before the next step; `mib_stub` bumps the clear counter for you.
+
+From the MIB itself the same request is one struct on the tuning topic. Add
+a tuning publisher and a request counter to the `Wheel` above:
+
+```cpp
+// In Wheel, declared after `state`:
+//   espp::Publisher<rammp::MotorTuning> tune;
+//   uint8_t tune_req{0};
+// and last in the constructor's initializer list:
+//   tune(part, {.topic = axis.tuning.name, .type_name = axis.tuning.type})
+void send_tuning(Wheel &w, float kp, float ki, float pll_hz, bool persist) {
+  rammp::MotorTuning t{};
+  t.tuning_req_id = ++w.tune_req; // the board acts on a NEW value only
+  t.persist = persist ? 1 : 0;
+  t.speed_kp = kp;                // 0 = leave as is
+  t.speed_ki = ki;
+  t.hall_pll_hz = pll_hz;
+  w.tune.publish(t);
+  // Best effort: watch MotorState.tuning_ack == t.tuning_req_id and read
+  // speed_kp / speed_ki / hall_pll_hz back; resend if it did not take.
+}
+```
+
+Call it once when a value changes. The gains apply on the next 10 ms tick
+without resetting the integrator, so it is safe under way.
+
 ## One wheel, three topics
 
 Each board is one wheel. It reads two topics and writes one. Nothing else
