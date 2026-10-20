@@ -5,9 +5,10 @@
  *
  * - C++20. The struct IS the wire layout: XCDR1, fields in declaration order.
  * - The first four fields are the ROS EStop message (std_msgs/Header, engaged, source,
- *   reason). pub_seq, clear_target and clear_pub_seq are appended, so a decoder that
- *   knows only the ROS layout still reads the start correctly. Being ROS 2 compatible is
- *   not a goal: the topic and type names follow the rammp convention.
+ *   reason). Its bool `engaged` is the EStopState `state` here, with the same byte values.
+ *   pub_seq, clear_target and clear_pub_seq are appended, so a decoder that knows only the
+ *   ROS layout still reads the start correctly. Being ROS 2 compatible is not a goal: the
+ *   topic and type names follow the rammp convention.
  * - The stamp is for the log only. Staleness is judged by receive time on the
  *   receiver's steady clock, never by the stamp, which depends on clock sync.
  *
@@ -16,28 +17,28 @@
  *
  * What an e-stop message means:
  *
- *   engaged  clear_target  meaning                                 who sends it
- *   true     (any)         engage; always acted on, never age-    any node
+ *   state        clear_target  meaning                                 who sends it
+ *   ENGAGED      (any)         engage; always acted on, never age-    any node
  *                          or pub_seq-checked
- *   false    ""            heartbeat: "alive, not engaging";      any node, every period
+ *   NOT_ENGAGED  ""            heartbeat: "alive, not engaging";      any node, every period
  *                          it never ends the stop
- *   false    "<src>"       clear attempt for <src>'s engagement   kEStopClearer only
+ *   NOT_ENGAGED  "<src>"       clear attempt for <src>'s engagement   kEStopClearer only
  *
- * A plain engaged=false is not a clear attempt (the ROS comment says false "clears it"):
+ * A plain NOT_ENGAGED is not a clear attempt (the ROS comment says false "clears it"):
  * otherwise any node's normal heartbeat would end another node's stop. A decoder that
  * knows only the ROS layout reads pub_seq = 0 and clear_target = "", so its messages are
  * heartbeats or engages, never clear attempts.
  *
  * Clear attempt (the full rules and races: pace-hmi-fw docs/plans/estop.md):
- *   - Every node sends at least every kEStopPolicy.period: engaged=true while it wants
- *     the stop, engaged=false otherwise. A node that engaged keeps sending engaged=true
+ *   - Every node sends at least every kEStopPolicy.period: state=ENGAGED while it wants
+ *     the stop, state=NOT_ENGAGED otherwise. A node that engaged keeps sending ENGAGED
  *     until it accepts a clear attempt.
  *   - The clearer sets clear_pub_seq to the newest pub_seq it has received from the
  *     target and resends the clear attempt every period, never changing clear_pub_seq
  *     during the attempt.
  *   - The target accepts it only if clear_pub_seq >= its engaged_pub_seq (the pub_seq of
- *     its first engaged=true after its latest press), then sends engaged=false.
- *   - The clearer releases the stop once the target's newest message is engaged=false
+ *     its first ENGAGED after its latest press), then sends NOT_ENGAGED.
+ *   - The clearer releases the stop once the target's newest message is NOT_ENGAGED
  *     with pub_seq > clear_pub_seq, received within kEStopPolicy.timeout. If that does
  *     not happen within kEStopPolicy.clear_window, the attempt expires and the stop holds.
  *   - Deadman: a source silent longer than kEStopPolicy.timeout counts as engaged.
@@ -76,10 +77,18 @@ struct Header {
   std::string frame_id; /**< unused by the e-stop, sent empty */
 };
 
+/** What an e-stop message asks for. One octet on the wire with the same values as the ROS
+    message's bool `engaged` (0 = false, 1 = true). A receiver treats any value other than
+    NOT_ENGAGED as ENGAGED: the fail-safe reading. */
+enum class EStopState : uint8_t {
+  NOT_ENGAGED = 0, /**< heartbeat: this node is not asking for the stop */
+  ENGAGED = 1,     /**< this node asks for the stop */
+};
+
 /** Broadcast emergency stop. See the table at the top for what each combination means. */
 struct EStop {
   Header header;            /**< stamp: for the log only, never for decisions */
-  bool engaged;             /**< true = engage; false = heartbeat, or a clear attempt */
+  EStopState state;         /**< ENGAGED = engage; NOT_ENGAGED = heartbeat, or a clear attempt */
   std::string source;       /**< who published it (node name), for the log and the attempt */
   std::string reason;       /**< free text, for the log */
   uint32_t pub_seq;         /**< this publisher's message number: +1 per message, wraps */
@@ -99,8 +108,8 @@ struct EStopPolicy {
   std::chrono::milliseconds period;       /**< every node sends at least this often */
   std::chrono::milliseconds timeout;      /**< a source silent this long counts as engaged
                                                (if deadman); also how fresh the
-                                               releasing engaged=false must be */
-  bool deadman;                           /**< false: only engaged=true stops; silence is
+                                               releasing NOT_ENGAGED must be */
+  bool deadman;                           /**< false: only ENGAGED stops; silence is
                                                just logged */
   std::chrono::milliseconds clear_window; /**< a clear attempt not completed within
                                                this expires; the stop holds */
