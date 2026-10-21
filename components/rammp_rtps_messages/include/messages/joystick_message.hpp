@@ -20,7 +20,8 @@
  *   RAMMP_TOPIC_<PUBLISHER>_<MESSAGE>   RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND
  *   k<Publisher><Message>               kJoystickSeatCommand     the typed Topic<>
  *
- * Contents: Topics and types, Tables (seat axes, diagnostics), Messages.
+ * Contents: Topics and types, Tables (seat axes, diagnostics), Messages (MotorJog and
+ * Motors are the motor debug list: the motors themselves are in messages/motor_message.hpp).
  *
  * The MIB's own state - what the chair is doing, where the seat is - is MIB::MibStatus
  * in messages/mib_message.hpp, which this header includes for MIB::DriveProfile.
@@ -48,7 +49,8 @@
 #include <string>
 #include <vector>
 
-#include "messages/mib_message.hpp" /* MIB::DriveProfile, and MibStatus for the topic list */
+#include "messages/mib_message.hpp"   /* MIB::DriveProfile, and MibStatus for the topic list */
+#include "messages/motor_message.hpp" /* BoardState and FaultCode, for the motor list */
 #include "messages/topic.hpp"
 
 /* -------------------------------------------------------------------------
@@ -62,11 +64,15 @@
 #define RAMMP_TYPE_DRIVE_COMMAND "rammp/msg/DriveCommand"
 #define RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND "rammp/joystick/seat_command"
 #define RAMMP_TYPE_SEAT_COMMAND "rammp/msg/SeatCommand"
+#define RAMMP_TOPIC_JOYSTICK_MOTOR_JOG "rammp/joystick/motor_jog"
+#define RAMMP_TYPE_MOTOR_JOG "rammp/msg/MotorJog"
 
 /* MCB -> joystick. The state of the chair itself is RAMMP_TOPIC_MIB_STATUS, in
    messages/mib_message.hpp. */
 #define RAMMP_TOPIC_MCB_DIAGNOSTICS "rammp/mcb/diagnostics"
 #define RAMMP_TYPE_DIAGNOSTICS "rammp/msg/Diagnostics"
+#define RAMMP_TOPIC_MIB_MOTORS "rammp/mib/motors"
+#define RAMMP_TYPE_MOTORS "rammp/msg/Motors"
 
 namespace rammp {
 
@@ -75,7 +81,9 @@ namespace rammp {
 struct XYTwist;
 struct DriveCommand;
 struct SeatCommand;
+struct MotorJog;
 struct Diagnostics;
+struct Motors;
 
 inline constexpr Topic<XYTwist> kJoystickXYTwist{RAMMP_TOPIC_JOYSTICK_XY_TWIST,
                                                  RAMMP_TYPE_XY_TWIST};
@@ -83,8 +91,11 @@ inline constexpr Topic<DriveCommand> kJoystickDriveCommand{RAMMP_TOPIC_JOYSTICK_
                                                            RAMMP_TYPE_DRIVE_COMMAND};
 inline constexpr Topic<SeatCommand> kJoystickSeatCommand{RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND,
                                                          RAMMP_TYPE_SEAT_COMMAND};
+inline constexpr Topic<MotorJog> kJoystickMotorJog{RAMMP_TOPIC_JOYSTICK_MOTOR_JOG,
+                                                   RAMMP_TYPE_MOTOR_JOG};
 inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
                                                     RAMMP_TYPE_DIAGNOSTICS};
+inline constexpr Topic<Motors> kMibMotors{RAMMP_TOPIC_MIB_MOTORS, RAMMP_TYPE_MOTORS};
 
 /* -------------------------------------------------------------------------
  * Tables: one row per seat axis / diagnostics item. To add one, add ONE row: the next
@@ -204,6 +215,15 @@ struct SeatCommand {
   float target;  /**< where to put it, in the axis' unit */
 };
 
+/** Ask the MIB to jog one motor, for debugging: hold-to-run. Resent at least every
+    100 ms while held; the MIB stops the motor 300 ms after the last one, so a lost
+    link or a released button stops it. The MIB picks the speed, and jogs only while
+    it is IDLE and the e-stop is clear. */
+struct MotorJog {
+  uint8_t axis_id;  /**< a Motors entry's axis_id */
+  int8_t direction; /**< -1 or +1; 0 = stop now */
+};
+
 /* -------------------------------------------------------------------------
  * Messages: MCB -> joystick (the MCB owns the state and resends it, changed or not)
  * ---------------------------------------------------------------------- */
@@ -216,6 +236,25 @@ struct DiagItem {
 struct Diagnostics {
   uint8_t seq;                 /**< +1 per message, wraps */
   std::vector<DiagItem> items; /**< one per RAMMP_DIAG_TABLE row */
+};
+
+/** One motor board, as the MIB last heard from it. */
+struct MotorSummary {
+  uint8_t axis_id;      /**< AxisId as a number: a joystick lists it, never switches on it */
+  uint8_t online;       /**< 1 = a MotorState arrived recently; 0 = the rest is stale */
+  BoardState state;     /**< MotorState.state */
+  FaultCode fault_code; /**< MotorState.fault_code */
+  float position;       /**< rad, MotorState.position */
+  float velocity;       /**< rad/s, MotorState.velocity */
+  std::string label;    /**< "Drive L", the axis table's label */
+};
+
+/** The motors the MIB commands: one entry per RAMMP_AXIS_TABLE row, in table order, at
+    about 5 Hz. The joystick builds its motor list from this, so a row added to or
+    removed from the table needs only the MIB rebuilt. */
+struct Motors {
+  uint8_t seq;                      /**< +1 per message, wraps */
+  std::vector<MotorSummary> motors; /**< one per axis */
 };
 
 } // namespace rammp
