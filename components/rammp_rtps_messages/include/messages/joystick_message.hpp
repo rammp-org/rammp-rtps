@@ -108,7 +108,9 @@ inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
 #define RAMMP_DIAG_TABLE(D)                                                                        \
   D(0, TEST_1, "T1", "Test actuator 1", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
   D(1, TEST_2, "T2", "Test actuator 2", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
-  D(2, TEST_3, "T3", "Test actuator 3", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)
+  D(2, TEST_3, "T3", "Test actuator 3", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
+  D(3, IMU_TILT, "I1", "IMU tilt", "Roll [deg]", 1, "Pitch [deg]", 1, "Heading [deg]", 1)          \
+  D(4, IMU_STATUS, "I2", "IMU status", "Yaw rate [deg/s]", 1, "Gyro cal [0-3]", 0, "Temp [C]", 0)
 
 /* Generated from the tables: the ids (SeatAxis::ELEVATION = 0, ...) and the rows. */
 
