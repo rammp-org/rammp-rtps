@@ -35,12 +35,21 @@ enum class DriveProfile : uint8_t {
 
 /**
  * @brief High-level operating state of the MIB system.
+ *
+ * The joystick picks its page from this value, so every state the joystick must
+ * draw differently is its own value here; status_text only words the label.
+ * New values are appended so the ones already on the wire keep their numbers.
+ * A decoder that meets a value it does not know should fall back to a neutral
+ * page rather than reject the message.
  */
 enum class MibSystemState : uint8_t {
     INITIALIZING, /**< The system is initializing and is not ready. */
     IDLE,         /**< The system is idle and waiting for enable; seat control is available, but drive is disabled. */
     ENABLED,      /**< The system is enabled and operational; manual seat control is disabled. */
-    ERROR         /**< The system has encountered an error. */
+    ERROR,        /**< The system has encountered an error. */
+    AUTONOMOUS,   /**< Another node is driving; the joystick is not read for driving, and touching it hands control back (the MIB returns to IDLE). */
+    SHARED,       /**< Another node and the joystick drive together; the joystick stick is read and blended. */
+    ESTOP         /**< Emergency stop: drive is cut and held; the MIB returns to IDLE on its own when the hold ends. */
 };
 
 /**
