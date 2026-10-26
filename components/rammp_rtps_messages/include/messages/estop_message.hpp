@@ -57,6 +57,7 @@
 #include <cstdint>
 #include <string>
 
+#include "messages/header.hpp" /* Header: stamp for the log only, frame_id sent empty */
 #include "messages/topic.hpp"
 
 /* Broadcast: no publisher segment, any node publishes. */
@@ -64,18 +65,6 @@
 #define RAMMP_TYPE_ESTOP "rammp/msg/EStop"
 
 namespace rammp {
-
-/** builtin_interfaces/Time */
-struct Time {
-  int32_t sec;      /**< seconds since 1970-01-01 UTC */
-  uint32_t nanosec; /**< 0..999'999'999 */
-};
-
-/** std_msgs/Header */
-struct Header {
-  Time stamp;           /**< for the log only; all-zero = unstamped, and accepted */
-  std::string frame_id; /**< unused by the e-stop, sent empty */
-};
 
 /** What an e-stop message asks for. One octet on the wire with the same values as the ROS
     message's bool `engaged` (0 = false, 1 = true). A receiver treats any value other than
