@@ -5,7 +5,8 @@ How to drive a PACE RACER wheel over ATOS. The wire types are
 document is the behaviour behind them. The firmware that implements it lives in
 `rammp-org/pace-racer-fw`, `components/pace-racer-board/atos-drive`.
 
-Status: API version 2. Version 1 was verified on the bench 2026-09-26 on a
+Status: API version 3. Version 3 (2026-10-19) only adds a way to set a speed
+gain to exactly 0 (Tuning); the wire layout is version 2's. Version 1 was verified on the bench 2026-09-26 on a
 NineBot S wheel, halls only, one board. The tuning topic (version 2,
 2026-10-09) builds on the board and in the host stand-in but has not been
 exercised on a wheel yet. The chair's two drive boards run version 2 firmware
@@ -164,7 +165,7 @@ reply once a second so you can read `tune ack=` and the gains in force:
 ```bash
 #!/usr/bin/env bash
 # usage: ./tune.sh <laptop-ip> <axis> <kp A/(rad/s)> <ki A/rad> <pll Hz> [save]
-# 0 for any gain means "leave as is". 'save' writes to NVS.
+# 0 for any gain means "leave as is", negative kp/ki means exactly 0. 'save' writes to NVS.
 set -eu
 IP=$1; AXIS=$2; KP=$3; KI=$4; PLL=$5; SAVE=${6:-}
 ./build/mib_stub "$IP" "$AXIS" <<SCRIPT
@@ -191,6 +192,7 @@ Then follow the order in the Tuning section:
 ./tune.sh 192.168.4.10 drive_left 2.39 2.4 10      # step 2: halve ki
 ./tune.sh 192.168.4.10 drive_left 1.2 2.4 10       # step 3: halve kp
 ./tune.sh 192.168.4.10 drive_left 1.2 2.4 5        # step 4: smoother feedback
+./tune.sh 192.168.4.10 drive_left 0 -1 0           # integrator off (ki exactly 0), rest unchanged
 ./tune.sh 192.168.4.10 drive_left 1.2 2.4 5 save   # keep it across reboots
 ./tune.sh 192.168.4.10 drive_right 1.2 2.4 5 save  # the other wheel is its own board
 ```
@@ -243,7 +245,7 @@ void send_tuning(Wheel &w, float kp, float ki, float pll_hz, bool persist) {
   rammp::MotorTuning t{};
   t.tuning_req_id = ++w.tune_req; // the board acts on a NEW value only
   t.persist = persist ? 1 : 0;
-  t.speed_kp = kp;                // 0 = leave as is
+  t.speed_kp = kp;                // 0 = leave as is, < 0 = exactly 0
   t.speed_ki = ki;
   t.hall_pll_hz = pll_hz;
   w.tune.publish(t);
@@ -487,8 +489,8 @@ a value changes, then watch `tuning_ack` and the three gain fields in
 | field | unit | 0 means | the board does |
 | --- | --- | --- | --- |
 | `tuning_req_id` | counter | | acts on a NEW value only, echoes it as `tuning_ack`. Resend the same message freely |
-| `speed_kp` | A per rad/s | unchanged | proportional gain of the velocity loop, clamped to the profile range |
-| `speed_ki` | A per rad | unchanged | integral gain, clamped |
+| `speed_kp` | A per rad/s | unchanged | proportional gain of the velocity loop, clamped to the profile range. Negative: exactly 0 |
+| `speed_ki` | A per rad | unchanged | integral gain, clamped. Negative: exactly 0, integrator off and emptied |
 | `hall_pll_hz` | Hz | unchanged | bandwidth of the tracking loop that turns hall edges into velocity, 0.5 to 50 |
 | `persist` | 0 / 1 | until reboot | 1 also writes the values to NVS; they come back at the next boot |
 
@@ -498,6 +500,17 @@ board clamps each value into a compile-time range and reports the values in
 force in `MotorState.speed_kp`, `speed_ki`, `hall_pll_hz`, so read those
 rather than assuming. Those three fields are always valid, tuned or not: they
 are the defaults until a MotorTuning changes them.
+
+To switch a term off, send a negative value: `speed_ki = -1` sets the
+integral gain to exactly 0 (version 3; 0 itself keeps meaning "leave as is",
+so a message that only touches one gain stays safe). With `speed_ki` at 0
+the board also holds the integrator at 0, so whatever current it was
+supplying goes away at once: under load, for example on a slope, that is a
+torque step until the proportional term catches up. Send it stopped if that
+matters. `speed_kp` can go to 0 the same way. A tiny positive value such as
+0.0001 is NOT the same thing: it is clamped and applied, and the integrator
+keeps what it holds. A version 2 board ignores a negative value; check
+`MotorState.api_version >= 3`, and read `speed_ki` back either way.
 
 What to send for a vibrating robot, in order:
 
