@@ -195,13 +195,17 @@ struct XYTwist {
 };
 
 enum class DriveRequest : uint8_t {
-  DISABLE = 0, /**< stop driving on the stick */
-  ENABLE = 1,  /**< drive on the stick */
+  DISABLE = 0,            /**< stop driving on the stick */
+  ENABLE = 1,             /**< drive on the stick */
+  PUSH_ASSIST_ENABLE = 2, /**< from IDLE: an assistant drives from the push handle, the stick is not read for driving */
+  PUSH_ASSIST_DISABLE = 3 /**< leave push assist, back to IDLE */
 };
 
-/** Ask the MIB to enable or disable driving, with the profile to drive with. Sent on
-    change; the joystick shows driving only once MibStatus says ENABLED. The profile is
-    MIB::DriveProfile, the one the MIB reports back in MibStatus.activeProfile. */
+/** Ask the MIB to enable or disable driving, with the profile to drive with, or to enter or
+    leave push assist. Sent on change; the joystick shows driving only once MibStatus says
+    ENABLED, and the push-assist page only once it says PUSH_ASSIST. The profile is
+    MIB::DriveProfile, the one the MIB reports back in MibStatus.activeProfile; push assist
+    ignores it. */
 struct DriveCommand {
   DriveRequest request;      /**< enable or disable */
   MIB::DriveProfile profile; /**< which profile to drive with */

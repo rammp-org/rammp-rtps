@@ -49,7 +49,8 @@ enum class MibSystemState : uint8_t {
     ERROR,        /**< The system has encountered an error. */
     AUTONOMOUS,   /**< Another node is driving; the joystick is not read for driving, and touching it hands control back (the MIB returns to IDLE). */
     SHARED,       /**< Another node and the joystick drive together; the joystick stick is read and blended. */
-    ESTOP         /**< Emergency stop: drive is cut and held; the MIB returns to IDLE on its own when the hold ends. */
+    ESTOP,        /**< Emergency stop: drive is cut and held; the MIB returns to IDLE on its own when the hold ends. */
+    PUSH_ASSIST   /**< An assistant drives from the push handle; the stick is not read for driving, so the joystick is free for its GUI. Left by DriveRequest::PUSH_ASSIST_DISABLE (back to IDLE). */
 };
 
 /**
