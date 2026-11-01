@@ -64,6 +64,12 @@
 #define RAMMP_TOPIC_ESTOP "rammp/estop"
 #define RAMMP_TYPE_ESTOP "rammp/msg/EStop"
 
+/* The robot-wide ROS 2 e-stop, /estop, which the arm already serves and obeys: ROS 2 wire
+   names of rammp_common_interfaces/msg/EStop. The MIB relays its latch onto it (see
+   EStopBroadcast). */
+#define RAMMP_ROS_TOPIC_ESTOP "rt/estop"
+#define RAMMP_ROS_TYPE_ESTOP "rammp_common_interfaces::msg::dds_::EStop_"
+
 namespace rammp {
 
 /** What an e-stop message asks for. One octet on the wire with the same values as the ROS
@@ -87,6 +93,26 @@ struct EStop {
 };
 
 inline constexpr Topic<EStop> kEStop{RAMMP_TOPIC_ESTOP, RAMMP_TYPE_ESTOP};
+
+/** The ROS 2 e-stop as the rest of the robot speaks it, field for field
+    rammp_common_interfaces/msg/EStop (header, engaged, source, reason): the first four
+    fields of EStop above, and nothing after them, so a ROS 2 subscriber never sees the
+    rammp handshake fields. Its rules are the ROS message's, not the rammp protocol's:
+    `engaged` true engages, `engaged` false CLEARS, and the stamp is load-bearing for a
+    clear. So a publisher sends it on change only. The MIB relays its latch: `true` (with
+    the latch's cause as `reason`) when the stop engages and about once a second while it
+    holds, `false` exactly once when the latch has cleared, never periodically. The MIB
+    also obeys it: any `true` from a source other than itself engages its latch, and a
+    `false` is ignored, since only the MIB clears. The joystick's e-stop stays on
+    rammp/estop; this is the bridge between the two. */
+struct EStopBroadcast {
+  Header header;      /**< stamp: when the state was read; all-zero = unstamped; frame_id "" */
+  bool engaged;       /**< true = engage the stop, false = clear it */
+  std::string source; /**< who published it, for the log; the MIB sends "mib" */
+  std::string reason; /**< free text, for the log; the MIB sends the latch's cause */
+};
+
+inline constexpr Topic<EStopBroadcast> kEStopBroadcast{RAMMP_ROS_TOPIC_ESTOP, RAMMP_ROS_TYPE_ESTOP};
 
 /** The only source whose clear attempts count: the MIB owns the latch. */
 inline constexpr char kEStopClearer[] = "mib";
