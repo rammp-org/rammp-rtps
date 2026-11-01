@@ -219,7 +219,8 @@ enum class FaultCode : uint8_t {
                             wheel, or feedback that has stopped reporting motion */
 };
 
-/** One axis's state, published at 20 Hz. Byte fields first, then 16-bit, 32-bit, floats:
+/** One axis's state, published at 50 Hz (PACE RACER firmware from pace-racer-fw ab44267,
+    2026-10-29; 20 Hz before). Byte fields first, then 16-bit, 32-bit, floats:
     XCDR1 aligns each field to its size, so this order pads 2 bytes. 92 bytes on the wire. */
 struct MotorState {
   uint8_t api_version;        /**< RAMMP_MOTOR_API_VERSION the board was built with */

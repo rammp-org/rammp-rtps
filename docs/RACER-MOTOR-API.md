@@ -265,7 +265,7 @@ crosses the wire: no calibration, no limit ceilings, no services.
 | direction | topic | type | rate |
 | --- | --- | --- | --- |
 | MIB to board | `rammp/mib/motor_command/<axis>` | `rammp::MotorCommand`, 28 bytes | streamed by the MIB, 10 to 50 Hz |
-| board to MIB | `rammp/<axis>/motor_state` | `rammp::MotorState`, 92 bytes | 20 Hz, always, armed or not |
+| board to MIB | `rammp/<axis>/motor_state` | `rammp::MotorState`, 92 bytes | 50 Hz, always, armed or not (20 Hz before pace-racer-fw `ab44267`) |
 | MIB to board | `rammp/mib/motor_tuning/<axis>` | `rammp::MotorTuning`, 16 bytes | when a gain changes; see Tuning |
 
 `<axis>` is `front_caster_left`, `front_caster_right`, `drive_left` or
@@ -279,7 +279,7 @@ flowchart LR
     R[drive_right board]
     MIB -- "rammp/mib/motor_command/drive_left<br/>MotorCommand, 10..50 Hz" --> L
     MIB -- "rammp/mib/motor_command/drive_right" --> R
-    L -- "rammp/drive_left/motor_state<br/>MotorState, 20 Hz" --> MIB
+    L -- "rammp/drive_left/motor_state<br/>MotorState, 50 Hz" --> MIB
     R -- "rammp/drive_right/motor_state" --> MIB
     DHCP[MIB DHCP server] -. lease .-> L
     DHCP -. lease .-> R
@@ -318,7 +318,7 @@ Two things the MIB should assert on every `MotorState`:
 - `cmd_age_ms < 100`. It reads 20 to 50 ms on a healthy stream; 65535 means the
   board has never heard from you.
 
-Record every `MotorState`. At 80 bytes and 20 Hz a wheel is 1.6 kB/s, and an
+Record every `MotorState`. At 92 bytes and 50 Hz a wheel is 4.6 kB/s, and an
 incident with a recording is a replay.
 
 ## MotorCommand
@@ -543,7 +543,7 @@ constants are not on the wire. Those are the profile's and the console's.
   have right now, and the board follows. What the board will not do is
   interpolate between two sparse targets, so a planner that computes a path
   has to stream it as it goes, the same way a joystick streams stick
-  positions. Odometry comes back in `position` at 20 Hz.
+  positions. Odometry comes back in `position` at 50 Hz.
 - Rely on a single command. Anything you send once may be lost; keep
   streaming the state you want.
 - Pause. SAFE_STOP ends in an active hold; ARMED resumes.
