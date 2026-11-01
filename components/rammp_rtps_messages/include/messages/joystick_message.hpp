@@ -225,8 +225,11 @@ enum class DriveRequest : uint8_t {
       AUTONOMOUS  any           AUTONOMOUS
       SHARED      any           SHARED
 
-    The MIB decides, and accepts AUTONOMOUS and SHARED from IDLE, ENABLED and PUSH_ASSIST,
-    nothing from INITIALIZING, ESTOP or ERROR. Sent on change. MibStatus.system_state is
+    The MIB decides. It accepts ENABLE from IDLE and ENABLED (a profile change while
+    driving), AUTONOMOUS and SHARED from IDLE, ENABLED and PUSH_ASSIST, and nothing from
+    INITIALIZING, ESTOP or ERROR. AUTONOMOUS, SHARED and PUSH_ASSIST each have their own
+    ways out (a stick touch ends AUTONOMOUS; DISABLE ends all three), so ENABLE is refused
+    there: leave first, then enable. Sent on change. MibStatus.system_state is
     the answer: a request the MIB has not answered yet may be repeated (the link is
     best-effort; the joystick resends its push-assist exit every 500 ms while the input is
     held), and once MibStatus has shown the requested state the request is done. A later
