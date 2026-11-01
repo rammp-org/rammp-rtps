@@ -58,7 +58,9 @@
  * was built with in MotorState::api_version; a mismatch is the MIB's to refuse.
  * ---------------------------------------------------------------------- */
 
-#define RAMMP_MOTOR_API_VERSION 2
+/* 3 (2026-10-19): a negative MotorTuning::speed_kp / speed_ki sets that gain to exactly 0.
+   Same layout as 2; a v2 board ignores the negative, so check api_version before relying on it. */
+#define RAMMP_MOTOR_API_VERSION 3
 
 /* -------------------------------------------------------------------------
  * Types: one type each way, shared by every axis.
@@ -169,8 +171,9 @@ struct MotorCommand {
 
 /** Outer-loop gains for one axis, applied live. The MIB sends it when a value changes and
     may repeat it; the board acts on a NEW `tuning_req_id` only (the clear_fault_req_id
-    idiom) and echoes it as MotorState::tuning_ack, with the values in force. A gain of 0
-    means "leave as is". Every value is clamped to the board's compile-time range; read it
+    idiom) and echoes it as MotorState::tuning_ack, with the values in force. A field of 0
+    means "leave as is"; a NEGATIVE speed_kp or speed_ki sets that gain to exactly 0 (v3),
+    and ki = 0 also empties the integrator. Every positive value is clamped to the board's compile-time range; read it
     back from MotorState rather than assuming. The current loop, the limit ceilings and the
     calibration are not here on purpose: those are the profile's and the console's.
     With `persist` set the board also saves the values to NVS so they survive a power
@@ -181,8 +184,8 @@ struct MotorTuning {
   uint8_t persist;       /**< 1 = also save to NVS; 0 = until reboot */
   uint8_t reserved0;     /**< send 0 */
   uint8_t reserved1;     /**< send 0 */
-  float speed_kp;        /**< A per rad/s of velocity error; 0 = unchanged */
-  float speed_ki;        /**< A per rad of integrated velocity error; 0 = unchanged */
+  float speed_kp;        /**< A per rad/s of velocity error; 0 = unchanged, < 0 = set to 0 */
+  float speed_ki;        /**< A per rad of integrated velocity error; 0 = unchanged, < 0 = set to 0 */
   float hall_pll_hz;     /**< hall speed tracking-loop bandwidth, Hz; 0 = unchanged */
 };
 
