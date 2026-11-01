@@ -58,6 +58,10 @@ and types in this repository, then consume this repository as a submodule.
   so the struct's are too. espp subscribers use the same names, so one publisher
   serves both sides. A message more than one node sends (`DriveCommand`, `EStop`)
   has no publisher segment: `RAMMP_ROS_TOPIC_DRIVE_COMMAND`, `kDriveCommand`.
+  One exception: the base's token arbitration (`control_message.hpp`,
+  `control_service.hpp`) is the arm's protocol served under the `base` namespace,
+  `rt/base/control_status`, `/base/acquire_control` and so on, so one orchestrator
+  client on the Jetson speaks to the arm and the base alike.
 5. Add action definitions under `components/rammp_rtps_actions/include/`.
 6. Add service definitions under `components/rammp_rtps_services/include/`.
 
