@@ -73,8 +73,7 @@ enum class MibSystemState : uint8_t {
   ESTOP = 6,        /**< emergency stop: drive is cut and held; the MIB returns to IDLE on
                          its own once the e-stop latch clears */
   PUSH_ASSIST = 7,  /**< an assistant drives from the push handle; the stick is not read
-                         for driving, so the joystick is free for its GUI. Entered and
-                         left by DriveCommand.push_assist */
+                         for driving. Entered and left by DriveCommand.push_assist */
 };
 
 /** Where the seat is: one field per RAMMP_SEAT_AXIS_TABLE row (joystick_message.hpp), in

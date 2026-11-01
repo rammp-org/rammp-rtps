@@ -226,11 +226,14 @@ enum class DriveRequest : uint8_t {
       SHARED      any           SHARED
 
     The MIB decides, and accepts AUTONOMOUS and SHARED from IDLE, ENABLED and PUSH_ASSIST,
-    nothing from INITIALIZING, ESTOP or ERROR. Sent on change only, never repeated: the
-    sender reads the outcome in MibStatus.system_state (the joystick shows driving only
-    once it says ENABLED), and a stick touch that ended AUTONOMOUS stands until the Jetson
-    asks again. The profile is the one the MIB reports back in MibStatus.active_profile;
-    push assist ignores it. 3 bytes on the wire. Mirrored by
+    nothing from INITIALIZING, ESTOP or ERROR. Sent on change. MibStatus.system_state is
+    the answer: a request the MIB has not answered yet may be repeated (the link is
+    best-effort; the joystick resends its push-assist exit every 500 ms while the input is
+    held), and once MibStatus has shown the requested state the request is done. A later
+    change of state is the MIB's decision, not a lost packet, so a sender asks again only
+    on a new decision of its own: a stick touch that ended AUTONOMOUS stands until the
+    Jetson has a new reason to ask. The profile is the one the MIB reports back in
+    MibStatus.active_profile; push assist ignores it. 3 bytes on the wire. Mirrored by
     rammp_base_interfaces/msg/DriveCommand. */
 struct DriveCommand {
   DriveRequest request; /**< the drive state asked for */
