@@ -1,103 +1,119 @@
 /**
  * @file mib_message.hpp
- * @brief RAMMP MIB RTPS messages: topic, type, and status payload definitions.
+ * @brief RAMMP MIB RTPS messages: the MIB's status, and the profiles, states and seat
+ * pose it carries.
  *
- * This header contains the message definitions shared by MIB RTPS publishers
- * and subscribers so both sides use the same topic names, type names, and
- * payload fields.
+ * The MIB publishes MibStatus for the joystick and for the ROS 2 nodes on the Jetson, so
+ * the message is ROS 2 facing: its topic is the ROS 2 wire name of /rammp/mib/status
+ * and its type is rammp_base_interfaces/msg/MibStatus from rammp-org/rammp-interfaces-ros2.
+ * That .msg mirrors this struct field for field and is not the source of truth. An espp
+ * subscriber (the joystick) uses the same two names, so one publisher serves both.
  *
- * Contents: MIB drive profiles, system states, seat state, and status message.
+ * Wire rules, the same as joystick_message.hpp: each struct IS the wire layout (espp/cdr
+ * serializes it as XCDR1, fields in declaration order), and every enum is scoped with a
+ * fixed width so its size on the wire is not the compiler's choice. MibStatus is resent
+ * periodically, best-effort and without durability, so a subscriber that starts late
+ * catches up on the next tick.
  *
- * Wire rules, the same as joystick_message.hpp: each struct IS the wire layout
- * (espp/cdr serializes it as XCDR1, fields in declaration order), and every enum
- * is scoped with a fixed width so its size on the wire is not the compiler's
- * choice. MibStatus is resent periodically, best-effort and without durability,
- * so a joystick that reboots catches up on the next tick.
+ * Contents: Topics and types, drive profiles, system states, seat state, status message.
  */
 
-#pragma once
+#ifndef RAMMP_RTPS_MIB_MESSAGE_HPP
+#define RAMMP_RTPS_MIB_MESSAGE_HPP
 
 #include <cstdint>
 #include <string>
 
 #include "messages/topic.hpp"
-namespace MIB{
 
+/* -------------------------------------------------------------------------
+ * Topics and types: ROS 2 wire names. ROS 2 prefixes a topic with "rt/" and writes the
+ * type pkg/msg/T as pkg::msg::dds_::T_, so a ROS 2 node sees /rammp/mib/status of type
+ * rammp_base_interfaces/msg/MibStatus.
+ * ---------------------------------------------------------------------- */
 
-/**
- * @brief Drive response profile used by the MIB.
- */
+/* MIB -> joystick and ROS 2 */
+#define RAMMP_ROS_TOPIC_MIB_STATUS "rt/rammp/mib/status"
+#define RAMMP_ROS_TYPE_MIB_STATUS "rammp_base_interfaces::msg::dds_::MibStatus_"
+
+namespace rammp {
+
+struct MibStatus;
+
+inline constexpr Topic<MibStatus> kMibStatus{RAMMP_ROS_TOPIC_MIB_STATUS, RAMMP_ROS_TYPE_MIB_STATUS};
+
+/* -------------------------------------------------------------------------
+ * Messages: MIB -> joystick and ROS 2 (the MIB owns the state and resends it)
+ * ---------------------------------------------------------------------- */
+
+/** Drive response profile. A DriveCommand asks for one; MibStatus.active_profile is the
+    one in force. */
 enum class DriveProfile : uint8_t {
-    LOW,    /**< Reduced drive response. */
-    NORMAL, /**< Standard drive response. */
-    HIGH    /**< Increased drive response. */
+  LOW = 0,    /**< reduced drive response */
+  NORMAL = 1, /**< standard drive response */
+  HIGH = 2,   /**< increased drive response */
 };
 
-/**
- * @brief High-level operating state of the MIB system.
- *
- * The joystick picks its page from this value, so every state the joystick must
- * draw differently is its own value here; status_text only words the label.
- * New values are appended so the ones already on the wire keep their numbers.
- * A decoder that meets a value it does not know should fall back to a neutral
- * page rather than reject the message.
- */
+/** High-level operating state of the MIB.
+
+    The joystick picks its page from this value, so every state the joystick must draw
+    differently is its own value here; MibStatus.status_text only words the label. New
+    values are appended so the ones already on the wire keep their numbers. A decoder
+    that meets a value it does not know should fall back to a neutral page rather than
+    reject the message. */
 enum class MibSystemState : uint8_t {
-    INITIALIZING, /**< The system is initializing and is not ready. */
-    IDLE,         /**< The system is idle and waiting for enable; seat control is available, but drive is disabled. */
-    ENABLED,      /**< The system is enabled and operational; manual seat control is disabled. */
-    ERROR,        /**< The system has encountered an error. */
-    AUTONOMOUS,   /**< Another node is driving; the joystick is not read for driving, and touching it hands control back (the MIB returns to IDLE). */
-    SHARED,       /**< Another node and the joystick drive together; the joystick stick is read and blended. */
-    ESTOP,        /**< Emergency stop: drive is cut and held; the MIB returns to IDLE on its own when the hold ends. */
-    PUSH_ASSIST   /**< An assistant drives from the push handle; the stick is not read for driving, so the joystick is free for its GUI. Left by DriveRequest::PUSH_ASSIST_DISABLE (back to IDLE). */
+  INITIALIZING = 0, /**< bringing up the board; not ready */
+  IDLE = 1,         /**< waiting for a DriveCommand; seat control is available, drive is disabled */
+  ENABLED = 2,      /**< the stick drives; manual seat control is disabled */
+  ERROR = 3,        /**< bring-up or runtime fault; error_message says why */
+  AUTONOMOUS = 4,   /**< another node (the Jetson) drives on TwistSetpoint; the stick is not
+                         read for driving, and touching it hands control back (IDLE) */
+  SHARED = 5,       /**< another node and the stick drive together; the stick is read and
+                         blended */
+  ESTOP = 6,        /**< emergency stop: drive is cut and held; the MIB returns to IDLE on
+                         its own once the e-stop latch clears */
+  PUSH_ASSIST = 7,  /**< an assistant drives from the push handle; the stick is not read
+                         for driving, so the joystick is free for its GUI. Entered and
+                         left by DriveCommand.push_assist */
 };
 
-/**
- * @brief Current position and orientation of the MIB seat.
- */
-struct seatState{
-    float front_back_tilt{0.0f}; /**< Front-to-back seat tilt. */
-    float lateral_tilt{0.0f};    /**< Side-to-side seat tilt. */
-    float elevation{0.0f};       /**< Seat elevation. */
-    float translation{0.0f};      /**< Seat translation. */
+/** Where the seat is: one field per RAMMP_SEAT_AXIS_TABLE row (joystick_message.hpp), in
+    that order, so a SeatAxis id indexes both. Whole units, the ones a SeatCommand asks
+    in. Mirrored by rammp_base_interfaces/msg/SeatState. */
+struct SeatState {
+  float front_back_tilt{0.0f}; /**< deg, front-to-back seat tilt */
+  float lateral_tilt{0.0f};    /**< deg, side-to-side seat tilt */
+  float elevation{0.0f};       /**< mm, seat elevation */
+  float translation{0.0f};     /**< mm, seat translation */
 };
 
-/** Topic used to publish the MIB status message. */
-#define RAMMP_TOPIC_MIB_STATUS "rammp/mib/status"
+/** The MIB's status, every 500 ms.
 
-/** Message type identifier associated with the MIB status topic. */
-#define RAMMP_TYPE_MIB_STATUS "rammp/msg/MibStatus"
+    The fields after error_message are what the joystick draws: the speed readout, the
+    TopBar clock (and the RTC it keeps across reboots), the wording for the state label,
+    and the second line of the error banner. They are appended, so a decoder that reads
+    only the first four fields still reads them correctly.
 
-/**
- * @brief Status message published by the MIB.
- *
- * The fields after error_message are what the joystick draws: the speed readout,
- * the TopBar clock (and the RTC it keeps across reboots), the wording for the
- * state label, and the second line of the error banner. They are appended, so a
- * decoder that reads only the first four fields still reads them correctly.
- *
- * Real quantities, not display units: speed is metres per second and the clock is
- * Unix time, both device-neutral. A joystick showing mph at one decimal converts
- * at its own edge, the way it already does for currentSeatState.
- *
- * The clock is UTC and carries its offset separately, so epoch_s is an ordinary
- * Unix timestamp that nothing has to second-guess; a screen showing the wall
- * clock adds utc_offset_min itself.
- */
+    Real quantities, not display units: speed is metres per second and the clock is Unix
+    time, both device-neutral. A joystick showing mph at one decimal converts at its own
+    edge, the way it already does for current_seat_state.
+
+    The clock is UTC and carries its offset separately, so epoch_s is an ordinary Unix
+    timestamp that nothing has to second-guess; a screen showing the wall clock adds
+    utc_offset_min itself. */
 struct MibStatus {
-    MibSystemState systemState{MibSystemState::INITIALIZING}; /**< Current system state. */
-    DriveProfile activeProfile{DriveProfile::NORMAL};         /**< Currently selected drive profile. */
-    seatState currentSeatState{};                             /**< Current seat position and orientation. */
-    std::string error_message{"No error"};                    /**< Human-readable error description. */
-    int64_t epoch_s{0};        /**< Unix time, seconds since 1970-01-01 UTC; 0 = clock not known. */
-    float speed{0.0f};         /**< Ground speed, metres per second. */
-    int16_t utc_offset_min{0}; /**< Minutes east of UTC, to turn epoch_s into local wall time. */
-    uint8_t seq{0};            /**< +1 per message, wraps; a gap is a dropped sample. */
-    std::string status_text{}; /**< Optional wording for the state label; "" = use the enum's name. */
-    std::string error_footer{}; /**< What to do about error_message, shown under it. */
+  MibSystemState system_state{MibSystemState::INITIALIZING}; /**< current system state */
+  DriveProfile active_profile{DriveProfile::NORMAL};         /**< profile in force */
+  SeatState current_seat_state{};                            /**< where the seat is */
+  std::string error_message{"No error"}; /**< human-readable; "No error" when none */
+  int64_t epoch_s{0};         /**< Unix time, seconds since 1970-01-01 UTC; 0 = clock not known */
+  float speed{0.0f};          /**< ground speed, m/s */
+  int16_t utc_offset_min{0};  /**< minutes east of UTC, to turn epoch_s into local wall time */
+  uint8_t seq{0};             /**< +1 per message, wraps; a gap is a dropped sample */
+  std::string status_text{};  /**< optional wording for the state label; "" = the enum's name */
+  std::string error_footer{}; /**< what to do about error_message, shown under it */
 };
 
-/** The MIB's status topic, typed. */
-inline constexpr rammp::Topic<MibStatus> kMibStatus{RAMMP_TOPIC_MIB_STATUS, RAMMP_TYPE_MIB_STATUS};
-} // namespace MIB
+} // namespace rammp
+
+#endif /* RAMMP_RTPS_MIB_MESSAGE_HPP */
