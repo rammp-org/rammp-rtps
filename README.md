@@ -11,7 +11,11 @@ and types in this repository, then consume this repository as a submodule.
   RTPS message topics, type names, constants, enums, and payload structs.
   - `messages/topic.hpp`: `Topic<Message>`, the typed topic/type handle every
     message header uses.
+  - `messages/control_message.hpp`: token arbitration for the base: who owns it
+    (`ControlStatus`) and the tokened `TwistSetpoint`. ROS 2 types and names.
   - `messages/estop_message.hpp`: the robot-wide e-stop, any node <-> the MIB.
+  - `messages/header.hpp`: the ROS 2 `Time` and `Header`, shared by the messages
+    that carry one.
   - `messages/joystick_message.hpp`: joystick <-> MIB. `XYTwist` and `DriveCommand`
     are ROS 2 facing (below): the Jetson reads the stick and sends drive requests.
   - `messages/mib_message.hpp`: the MIB's state, which the joystick draws and the
@@ -24,6 +28,8 @@ and types in this repository, then consume this repository as a submodule.
   RTPS action definitions.
 - [`components/rammp_rtps_services`](./components/rammp_rtps_services): shared
   RTPS service definitions.
+  - `services/control_service.hpp`: acquire, release, and revoke control of the
+    base. ROS 2 types and names.
 - [`components/rammp_rtps_interface`](./components/rammp_rtps_interface):
   aggregate header-only component that includes messages, actions, and services.
 
@@ -52,6 +58,10 @@ and types in this repository, then consume this repository as a submodule.
   so the struct's are too. espp subscribers use the same names, so one publisher
   serves both sides. A message more than one node sends (`DriveCommand`, `EStop`)
   has no publisher segment: `RAMMP_ROS_TOPIC_DRIVE_COMMAND`, `kDriveCommand`.
+  One exception: the base's token arbitration (`control_message.hpp`,
+  `control_service.hpp`) is the arm's protocol served under the `base` namespace,
+  `rt/base/control_status`, `/base/acquire_control` and so on, so one orchestrator
+  client on the Jetson speaks to the arm and the base alike.
 5. Add action definitions under `components/rammp_rtps_actions/include/`.
 6. Add service definitions under `components/rammp_rtps_services/include/`.
 
