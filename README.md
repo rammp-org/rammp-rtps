@@ -12,8 +12,10 @@ and types in this repository, then consume this repository as a submodule.
   - `messages/topic.hpp`: `Topic<Message>`, the typed topic/type handle every
     message header uses.
   - `messages/estop_message.hpp`: the robot-wide e-stop, any node <-> the MIB.
-  - `messages/joystick_message.hpp`: joystick <-> MCB.
-  - `messages/mib_message.hpp`: the MIB's state, which the joystick draws.
+  - `messages/joystick_message.hpp`: joystick <-> MIB. `XYTwist` and `DriveCommand`
+    are ROS 2 facing (below): the Jetson reads the stick and sends drive requests.
+  - `messages/mib_message.hpp`: the MIB's state, which the joystick draws and the
+    Jetson reads. ROS 2 facing.
   - `messages/motor_message.hpp`: MIB <-> PACE RACER motor controllers, per
     axis from `RAMMP_AXIS_TABLE`: command, state, and live speed-loop tuning
     (API version 3: a negative gain sets it to exactly 0). How to use it:
@@ -36,8 +38,22 @@ and types in this repository, then consume this repository as a submodule.
   `#define RAMMP_TYPE_<MESSAGE> "rammp/msg/<Message>"`, and the typed
   `inline constexpr Topic<Message> k<Publisher><Message>{...}` built from them, so a
   publisher or subscriber for the wrong message does not compile.
-4. Add action definitions under `components/rammp_rtps_actions/include/`.
-5. Add service definitions under `components/rammp_rtps_services/include/`.
+4. If a ROS 2 node (the Jetson) sends or reads it, the message is **ROS 2 facing**
+  and uses ROS 2 wire names instead, so a ROS 2 node matches it with no bridge:
+  `#define RAMMP_ROS_TOPIC_<PUBLISHER>_<MESSAGE> "rt/rammp/<publisher>/<message>"`
+  (ROS 2 prefixes every topic with `rt/`) and
+  `#define RAMMP_ROS_TYPE_<MESSAGE> "<pkg>::msg::dds_::<Message>_"`, where `<pkg>` is
+  the package the message lives in on
+  [rammp-interfaces-ros2](https://github.com/rammp-org/rammp-interfaces-ros2)
+  (`rammp_base_interfaces` for the base, `rammp_peripheral_interfaces` for the
+  joystick, `rammp_common_interfaces` for what no subsystem owns). The `k<...>` handle
+  is the same. Add a `.msg` there that mirrors the struct field for field, with a
+  comment saying the struct here is the source of truth; its fields are snake_case,
+  so the struct's are too. espp subscribers use the same names, so one publisher
+  serves both sides. A message more than one node sends (`DriveCommand`, `EStop`)
+  has no publisher segment: `RAMMP_ROS_TOPIC_DRIVE_COMMAND`, `kDriveCommand`.
+5. Add action definitions under `components/rammp_rtps_actions/include/`.
+6. Add service definitions under `components/rammp_rtps_services/include/`.
 
 Keep topic names and type names stable once released, since they are consumed by
 multiple projects.
