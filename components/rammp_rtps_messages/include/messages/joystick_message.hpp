@@ -1,6 +1,6 @@
 /**
  * @file joystick_message.hpp
- * @brief RAMMP joystick <-> MCB RTPS messages: topics, types, and payload structs.
+ * @brief RAMMP joystick <-> MIB RTPS messages: topics, types, and payload structs.
  * Any publisher or subscriber of these topics uses this header, so both sides match.
  * Only what both sides must agree on lives here; timing and helpers are each device's own.
  *
@@ -11,7 +11,7 @@
  * - IDL: uint8_t = octet, int8_t = int8, int32_t = long, uint32_t = unsigned long,
  *   float = float, std::string = string, std::vector<T> = sequence<T>; an enum is its width.
  * - Best-effort, no durability: state is resent periodically.
- * - The joystick asks, the MCB decides: a command is a request, and the joystick shows
+ * - The joystick asks, the MIB decides: a command is a request, and the joystick shows
  *   nothing until the matching state message says it happened.
  *
  * Naming, for every message:
@@ -66,21 +66,21 @@
  * Topics and types: rammp/<publisher>/<message> and rammp/msg/<Message>.
  * ---------------------------------------------------------------------- */
 
-/* joystick -> MCB and ROS 2 (the Jetson reads the stick too): ROS 2 wire names */
+/* joystick -> MIB and ROS 2 (the Jetson reads the stick too): ROS 2 wire names */
 #define RAMMP_ROS_TOPIC_JOYSTICK_XY_TWIST "rt/rammp/joystick/xy_twist"
 #define RAMMP_ROS_TYPE_XY_TWIST "rammp_peripheral_interfaces::msg::dds_::XYTwist_"
-/* joystick or ROS 2 -> MCB: two nodes send it, so no publisher segment. ROS 2 wire names */
+/* joystick or ROS 2 -> MIB: two nodes send it, so no publisher segment. ROS 2 wire names */
 #define RAMMP_ROS_TOPIC_DRIVE_COMMAND "rt/rammp/drive_command"
 #define RAMMP_ROS_TYPE_DRIVE_COMMAND "rammp_base_interfaces::msg::dds_::DriveCommand_"
-/* joystick -> MCB */
+/* joystick -> MIB */
 #define RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND "rammp/joystick/seat_command"
 #define RAMMP_TYPE_SEAT_COMMAND "rammp/msg/SeatCommand"
 #define RAMMP_TOPIC_JOYSTICK_MOTOR_JOG "rammp/joystick/motor_jog"
 #define RAMMP_TYPE_MOTOR_JOG "rammp/msg/MotorJog"
 
-/* MCB -> joystick. The state of the chair itself is RAMMP_ROS_TOPIC_MIB_STATUS, in
+/* MIB -> joystick. The state of the chair itself is RAMMP_ROS_TOPIC_MIB_STATUS, in
    messages/mib_message.hpp. */
-#define RAMMP_TOPIC_MCB_DIAGNOSTICS "rammp/mcb/diagnostics"
+#define RAMMP_TOPIC_MIB_DIAGNOSTICS "rammp/mib/diagnostics"
 #define RAMMP_TYPE_DIAGNOSTICS "rammp/msg/Diagnostics"
 #define RAMMP_TOPIC_MIB_MOTORS "rammp/mib/motors"
 #define RAMMP_TYPE_MOTORS "rammp/msg/Motors"
@@ -104,13 +104,13 @@ inline constexpr Topic<SeatCommand> kJoystickSeatCommand{RAMMP_TOPIC_JOYSTICK_SE
                                                          RAMMP_TYPE_SEAT_COMMAND};
 inline constexpr Topic<MotorJog> kJoystickMotorJog{RAMMP_TOPIC_JOYSTICK_MOTOR_JOG,
                                                    RAMMP_TYPE_MOTOR_JOG};
-inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
+inline constexpr Topic<Diagnostics> kMibDiagnostics{RAMMP_TOPIC_MIB_DIAGNOSTICS,
                                                     RAMMP_TYPE_DIAGNOSTICS};
 inline constexpr Topic<Motors> kMibMotors{RAMMP_TOPIC_MIB_MOTORS, RAMMP_TYPE_MOTORS};
 
 /* -------------------------------------------------------------------------
  * Tables: one row per seat axis / diagnostics item. To add one, add ONE row: the next
- * id, and a trailing `\` on every row but the last. The MCB then sends one more value
+ * id, and a trailing `\` on every row but the last. The MIB then sends one more value
  * per row (the matching SeatState field, Diagnostics.items). `short` and `label` are the names
  * every device uses for the row. A value is a raw integer in units of 10^-decimals
  * `unit`: ELEVATION 2500 with 1 decimal and "mm" is 250.0 mm.
@@ -186,7 +186,7 @@ inline constexpr std::array kDiagItems{
 inline constexpr size_t kDiagCount = kDiagItems.size();
 
 /* -------------------------------------------------------------------------
- * Messages: joystick -> MCB
+ * Messages: joystick -> MIB
  * ---------------------------------------------------------------------- */
 
 /** Pressed buttons, a bit set. */
@@ -196,7 +196,7 @@ enum class Buttons : uint32_t {
 };
 
 /** The stick, calibrated on the joystick: 0 at rest, deadzones applied, X/Y within the
-    unit circle. Twist always rotates in place. Sent continuously, as a broadcast: the MCB
+    unit circle. Twist always rotates in place. Sent continuously, as a broadcast: the MIB
     drives on it only while it has enabled driving (see DriveCommand), and ROS 2 nodes on
     the Jetson read it as rammp_peripheral_interfaces/msg/XYTwist. */
 struct XYTwist {
@@ -262,7 +262,7 @@ struct MotorJog {
 };
 
 /* -------------------------------------------------------------------------
- * Messages: MCB -> joystick (the MCB owns the state and resends it, changed or not)
+ * Messages: MIB -> joystick (the MIB owns the state and resends it, changed or not)
  * ---------------------------------------------------------------------- */
 
 struct DiagItem {
