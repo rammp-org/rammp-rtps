@@ -19,8 +19,11 @@ and types in this repository, then consume this repository as a submodule.
     that carry one.
   - `messages/joystick_message.hpp`: joystick <-> MIB. `XYTwist` and `DriveCommand`
     are ROS 2 facing (below): the Jetson reads the stick and sends drive requests.
+    `DriveProfileCommand` changes a drive profile's limits, from the joystick or a
+    bench tool.
   - `messages/mib_message.hpp`: the MIB's state, which the joystick draws and the
-    Jetson reads. ROS 2 facing.
+    Jetson reads. ROS 2 facing. `DriveProfileState`, every drive profile's limits in
+    force, is not: no ROS 2 node reads it, so it keeps the rammp names.
   - `messages/motor_message.hpp`: MIB <-> PACE RACER motor controllers, per
     axis from `RAMMP_AXIS_TABLE`: command, state, and live speed-loop tuning
     (API version 3: a negative gain sets it to exactly 0). How to use it:
