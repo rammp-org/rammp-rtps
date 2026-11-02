@@ -25,6 +25,8 @@ and types in this repository, then consume this repository as a submodule.
     axis from `RAMMP_AXIS_TABLE`: command, state, and live speed-loop tuning
     (API version 3: a negative gain sets it to exactly 0). How to use it:
     [`docs/RACER-MOTOR-API.md`](./docs/RACER-MOTOR-API.md).
+  - `messages/push_assist_message.hpp`: push-assist handles -> MIB: `HandleForce`,
+    the force on each push handle, which the MIB drives on in `PUSH_ASSIST`.
 - [`components/rammp_rtps_actions`](./components/rammp_rtps_actions): shared
   RTPS action definitions.
 - [`components/rammp_rtps_services`](./components/rammp_rtps_services): shared
