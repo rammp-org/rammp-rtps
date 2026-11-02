@@ -19,18 +19,27 @@
  *   RAMMP_TYPE_<MESSAGE>                RAMMP_TYPE_SEAT_COMMAND  "rammp/msg/SeatCommand"
  *   RAMMP_TOPIC_<PUBLISHER>_<MESSAGE>   RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND
  *   k<Publisher><Message>               kJoystickSeatCommand     the typed Topic<>
+ * A message more than one node sends has no publisher segment (kDriveCommand, kEStop).
+ * A ROS 2 facing message, one the Jetson sends or reads, uses ROS 2 wire names instead,
+ * so a ROS 2 node matches it with no bridge:
+ *   RAMMP_ROS_TOPIC_<PUBLISHER>_<MESSAGE>  "rt/" + the rammp topic
+ *   RAMMP_ROS_TYPE_<MESSAGE>               "<pkg>::msg::dds_::<Message>_", pkg the
+ *                                          rammp-interfaces-ros2 package it lives in
+ * with the same k<...> handle, and a .msg in rammp-org/rammp-interfaces-ros2 that mirrors
+ * the struct field for field (the struct here is the source of truth). Here: XYTwist and
+ * DriveCommand; the MIB's MibStatus in mib_message.hpp.
  *
  * Contents: Topics and types, Tables (seat axes, diagnostics), Messages (MotorJog and
  * Motors are the motor debug list: the motors themselves are in messages/motor_message.hpp).
  *
- * The MIB's own state - what the chair is doing, where the seat is - is MIB::MibStatus
- * in messages/mib_message.hpp, which this header includes for MIB::DriveProfile.
+ * The MIB's own state - what the chair is doing, where the seat is - is rammp::MibStatus
+ * in messages/mib_message.hpp, which this header includes for DriveProfile.
  *
  * Example (espp, `rtps` a started espp::RtpsParticipant): a MIB taking the joystick's
  * seat requests and answering with its status
  *
- *   espp::Publisher<MIB::MibStatus> status_pub(
- *       rtps, {.topic = MIB::kMibStatus.name, .type_name = MIB::kMibStatus.type});
+ *   espp::Publisher<rammp::MibStatus> status_pub(
+ *       rtps, {.topic = rammp::kMibStatus.name, .type_name = rammp::kMibStatus.type});
  *
  *   espp::Subscriber<rammp::SeatCommand> seat_sub(
  *       rtps, {.topic = rammp::kJoystickSeatCommand.name,
@@ -49,7 +58,7 @@
 #include <string>
 #include <vector>
 
-#include "messages/mib_message.hpp"   /* MIB::DriveProfile, and MibStatus for the topic list */
+#include "messages/mib_message.hpp"   /* DriveProfile, and MibStatus for the topic list */
 #include "messages/motor_message.hpp" /* BoardState and FaultCode, for the motor list */
 #include "messages/topic.hpp"
 
@@ -57,11 +66,13 @@
  * Topics and types: rammp/<publisher>/<message> and rammp/msg/<Message>.
  * ---------------------------------------------------------------------- */
 
+/* joystick -> MCB and ROS 2 (the Jetson reads the stick too): ROS 2 wire names */
+#define RAMMP_ROS_TOPIC_JOYSTICK_XY_TWIST "rt/rammp/joystick/xy_twist"
+#define RAMMP_ROS_TYPE_XY_TWIST "rammp_peripheral_interfaces::msg::dds_::XYTwist_"
+/* joystick or ROS 2 -> MCB: two nodes send it, so no publisher segment. ROS 2 wire names */
+#define RAMMP_ROS_TOPIC_DRIVE_COMMAND "rt/rammp/drive_command"
+#define RAMMP_ROS_TYPE_DRIVE_COMMAND "rammp_base_interfaces::msg::dds_::DriveCommand_"
 /* joystick -> MCB */
-#define RAMMP_TOPIC_JOYSTICK_XY_TWIST "rammp/joystick/xy_twist"
-#define RAMMP_TYPE_XY_TWIST "rammp/msg/XYTwist"
-#define RAMMP_TOPIC_JOYSTICK_DRIVE_COMMAND "rammp/joystick/drive_command"
-#define RAMMP_TYPE_DRIVE_COMMAND "rammp/msg/DriveCommand"
 #define RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND "rammp/joystick/seat_command"
 #define RAMMP_TYPE_SEAT_COMMAND "rammp/msg/SeatCommand"
 #define RAMMP_TOPIC_JOYSTICK_DRIVE_PROFILE_COMMAND "rammp/joystick/drive_profile_command"
@@ -69,7 +80,7 @@
 #define RAMMP_TOPIC_JOYSTICK_MOTOR_JOG "rammp/joystick/motor_jog"
 #define RAMMP_TYPE_MOTOR_JOG "rammp/msg/MotorJog"
 
-/* MCB -> joystick. The state of the chair itself is RAMMP_TOPIC_MIB_STATUS, in
+/* MCB -> joystick. The state of the chair itself is RAMMP_ROS_TOPIC_MIB_STATUS, in
    messages/mib_message.hpp. */
 #define RAMMP_TOPIC_MCB_DIAGNOSTICS "rammp/mcb/diagnostics"
 #define RAMMP_TYPE_DIAGNOSTICS "rammp/msg/Diagnostics"
@@ -88,10 +99,10 @@ struct MotorJog;
 struct Diagnostics;
 struct Motors;
 
-inline constexpr Topic<XYTwist> kJoystickXYTwist{RAMMP_TOPIC_JOYSTICK_XY_TWIST,
-                                                 RAMMP_TYPE_XY_TWIST};
-inline constexpr Topic<DriveCommand> kJoystickDriveCommand{RAMMP_TOPIC_JOYSTICK_DRIVE_COMMAND,
-                                                           RAMMP_TYPE_DRIVE_COMMAND};
+inline constexpr Topic<XYTwist> kJoystickXYTwist{RAMMP_ROS_TOPIC_JOYSTICK_XY_TWIST,
+                                                 RAMMP_ROS_TYPE_XY_TWIST};
+inline constexpr Topic<DriveCommand> kDriveCommand{RAMMP_ROS_TOPIC_DRIVE_COMMAND,
+                                                   RAMMP_ROS_TYPE_DRIVE_COMMAND};
 inline constexpr Topic<SeatCommand> kJoystickSeatCommand{RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND,
                                                          RAMMP_TYPE_SEAT_COMMAND};
 inline constexpr Topic<DriveProfileCommand> kJoystickDriveProfileCommand{
@@ -105,13 +116,13 @@ inline constexpr Topic<Motors> kMibMotors{RAMMP_TOPIC_MIB_MOTORS, RAMMP_TYPE_MOT
 /* -------------------------------------------------------------------------
  * Tables: one row per seat axis / diagnostics item. To add one, add ONE row: the next
  * id, and a trailing `\` on every row but the last. The MCB then sends one more value
- * per row (the matching MIB::seatState field, Diagnostics.items). `short` and `label` are the names
+ * per row (the matching SeatState field, Diagnostics.items). `short` and `label` are the names
  * every device uses for the row. A value is a raw integer in units of 10^-decimals
  * `unit`: ELEVATION 2500 with 1 decimal and "mm" is 250.0 mm.
  * ---------------------------------------------------------------------- */
 
 /* X(id, NAME, short, label, min, max, step, decimals, unit)
-   One row per field of MIB::seatState, in that struct's order: the id indexes both.
+   One row per field of SeatState (mib_message.hpp), in that struct's order: the id indexes both.
    Ranges are raw integers in units of 10^-decimals `unit`; the wire carries the same
    quantity as a float in whole units, so raw 2500 with 1 decimal is 250.0 mm. */
 #define RAMMP_SEAT_AXIS_TABLE(X)                                                                   \
@@ -190,8 +201,9 @@ enum class Buttons : uint32_t {
 };
 
 /** The stick, calibrated on the joystick: 0 at rest, deadzones applied, X/Y within the
-    unit circle. Twist always rotates in place. Sent continuously; the MCB drives on it
-    only while it has enabled driving (see DriveCommand). */
+    unit circle. Twist always rotates in place. Sent continuously, as a broadcast: the MCB
+    drives on it only while it has enabled driving (see DriveCommand), and ROS 2 nodes on
+    the Jetson read it as rammp_peripheral_interfaces/msg/XYTwist. */
 struct XYTwist {
   float x;         /**< -1..+1, + = right */
   float y;         /**< -1..+1, + = forward */
@@ -199,26 +211,47 @@ struct XYTwist {
   Buttons buttons; /**< pressed buttons */
 };
 
+/** What a DriveCommand asks the MIB to do with the drive. */
 enum class DriveRequest : uint8_t {
-  DISABLE = 0,            /**< stop driving on the stick */
-  ENABLE = 1,             /**< drive on the stick */
-  PUSH_ASSIST_ENABLE = 2, /**< from IDLE: an assistant drives from the push handle, the stick is not read for driving */
-  PUSH_ASSIST_DISABLE = 3 /**< leave push assist, back to IDLE */
+  DISABLE = 0,    /**< not driving on the stick: IDLE, or PUSH_ASSIST if push_assist is set */
+  ENABLE = 1,     /**< drive on the stick: ENABLED */
+  AUTONOMOUS = 2, /**< another node (the Jetson) drives on TwistSetpoint; a stick touch ends it */
+  SHARED = 3,     /**< that node and the stick drive together */
 };
 
-/** Ask the MIB to enable or disable driving, with the profile to drive with, or to enter or
-    leave push assist. Sent on change; the joystick shows driving only once MibStatus says
-    ENABLED, and the push-assist page only once it says PUSH_ASSIST. The profile is
-    MIB::DriveProfile, the one the MIB reports back in MibStatus.activeProfile; push assist
-    ignores it. */
+/** Ask the MIB for a drive state. Any node may send it: the joystick sends DISABLE and
+    ENABLE (and push_assist), the Jetson sends AUTONOMOUS and SHARED. Each command states
+    the whole target, so the sender's idea of the current state does not matter:
+
+      request     push_assist   MIB state
+      DISABLE     false         IDLE
+      DISABLE     true          PUSH_ASSIST
+      ENABLE      any           ENABLED
+      AUTONOMOUS  any           AUTONOMOUS
+      SHARED      any           SHARED
+
+    The MIB decides. It accepts ENABLE from IDLE and ENABLED (a profile change while
+    driving), AUTONOMOUS and SHARED from IDLE, ENABLED and PUSH_ASSIST, and nothing from
+    INITIALIZING, ESTOP or ERROR. AUTONOMOUS, SHARED and PUSH_ASSIST each have their own
+    ways out (a stick touch ends AUTONOMOUS; DISABLE ends all three), so ENABLE is refused
+    there: leave first, then enable. Sent on change. MibStatus.system_state is
+    the answer: a request the MIB has not answered yet may be repeated (the link is
+    best-effort; the joystick resends its push-assist exit every 500 ms while the input is
+    held), and once MibStatus has shown the requested state the request is done. A later
+    change of state is the MIB's decision, not a lost packet, so a sender asks again only
+    on a new decision of its own: a stick touch that ended AUTONOMOUS stands until the
+    Jetson has a new reason to ask. The profile is the one the MIB reports back in
+    MibStatus.active_profile; push assist ignores it. 3 bytes on the wire. Mirrored by
+    rammp_base_interfaces/msg/DriveCommand. */
 struct DriveCommand {
-  DriveRequest request;      /**< enable or disable */
-  MIB::DriveProfile profile; /**< which profile to drive with */
+  DriveRequest request; /**< the drive state asked for */
+  DriveProfile profile; /**< which profile to drive with */
+  bool push_assist;     /**< with DISABLE: an assistant drives from the push handle */
 };
 
 /** Ask the MIB to put one seat axis at `target`. Absolute, so a lost or repeated
     message cannot drift the seat; the MIB clamps to the axis' min/max. The target is in
-    whole units (degrees, millimetres), matching the MIB::seatState field it moves. */
+    whole units (degrees, millimetres), matching the SeatState field it moves. */
 struct SeatCommand {
   SeatAxis axis; /**< which axis to move */
   float target;  /**< where to put it, in the axis' unit */
@@ -230,7 +263,7 @@ enum class DriveProfileAction : uint8_t {
 };
 
 /** Change one MIB drive profile's limits. The MIB acts on a NEW `req_id` only (the
-    MotorTuning idiom), so send it until MIB::DriveProfileState::command_ack shows the
+    MotorTuning idiom), so send it until DriveProfileState::command_ack shows the
     req_id, then read the result there. The MIB checks every value and rejects the whole
     command if any is out of range. Applying the active profile while driving keeps the
     chair's current speed and ramps to the new limits.
@@ -239,10 +272,10 @@ enum class DriveProfileAction : uint8_t {
     until reboot, which is what you want while experimenting. 44 bytes on the wire. */
 struct DriveProfileCommand {
   uint8_t req_id;                 /**< +1 per request, wraps, skipping 0 */
-  MIB::DriveProfile profile;      /**< which profile to change */
+  DriveProfile profile;      /**< which profile to change */
   DriveProfileAction action;      /**< SET or RESET */
   uint8_t persist;                /**< 1 = also save (SET) or delete the saved copy (RESET) */
-  MIB::DriveProfileValues values; /**< the new limits; SET only, ignored by RESET */
+  DriveProfileValues values; /**< the new limits; SET only, ignored by RESET */
 };
 
 /** Ask the MIB to jog one motor, for debugging: hold-to-run. Resent at least every

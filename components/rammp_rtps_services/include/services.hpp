@@ -1,3 +1,3 @@
 #pragma once
 
-/* Shared RTPS service definitions go here. */
+#include "services/control_service.hpp"
