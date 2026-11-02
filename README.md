@@ -15,6 +15,9 @@ and types in this repository, then consume this repository as a submodule.
     (`ControlStatus`) and the tokened `TwistSetpoint`. ROS 2 types and names.
   - `messages/estop_message.hpp`: the robot-wide e-stop, any node <-> the MIB. ROS 2
     facing: the arm and the Jetson read it as `rammp_common_interfaces/msg/EStop`.
+  - `messages/geometry_message.hpp`: the ROS 2 `geometry_msgs` types (`Vector3`,
+    `Point`, `Quaternion`, `Pose`, `Twist`, their covariance forms, `Transform`,
+    `TransformStamped`), shared by the messages that carry one.
   - `messages/header.hpp`: the ROS 2 `Time` and `Header`, shared by the messages
     that carry one.
   - `messages/joystick_message.hpp`: joystick <-> MIB. `XYTwist` and `DriveCommand`
@@ -25,6 +28,9 @@ and types in this repository, then consume this repository as a submodule.
     axis from `RAMMP_AXIS_TABLE`: command, state, and live speed-loop tuning
     (API version 3: a negative gain sets it to exactly 0). How to use it:
     [`docs/RACER-MOTOR-API.md`](./docs/RACER-MOTOR-API.md).
+  - `messages/odometry_message.hpp`: the base's wheel odometry, MIB -> ROS 2:
+    `nav_msgs/Odometry` on `/base/odom` and the `odom -> base_link` transform on
+    `/tf`. Standard ROS 2 types and names.
   - `messages/push_assist_message.hpp`: push-assist handles -> MIB: `HandleForce`,
     the force on each push handle, which the MIB drives on in `PUSH_ASSIST`.
 - [`components/rammp_rtps_actions`](./components/rammp_rtps_actions): shared
@@ -64,7 +70,12 @@ and types in this repository, then consume this repository as a submodule.
   One exception: the base's token arbitration (`control_message.hpp`,
   `control_service.hpp`) is the arm's protocol served under the `base` namespace,
   `rt/base/control_status`, `/base/acquire_control` and so on, so one orchestrator
-  client on the Jetson speaks to the arm and the base alike.
+  client on the Jetson speaks to the arm and the base alike. The base's other ROS 2
+  facing topics follow it (`rt/base/odom`).
+  A message whose type is a standard ROS 2 one (`nav_msgs/Odometry`,
+  `tf2_msgs/TFMessage`) keeps the standard package in its type name, has no `.msg`
+  on rammp-interfaces-ros2, and its struct here mirrors the ROS definition; its
+  topic is still named here, in its `RAMMP_ROS_TOPIC_*` macro.
 5. Add action definitions under `components/rammp_rtps_actions/include/`.
 6. Add service definitions under `components/rammp_rtps_services/include/`.
 
