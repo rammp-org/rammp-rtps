@@ -9,7 +9,8 @@
  * - Enums are scoped with a fixed wire width, and Topic<Message> ties each topic to its
  *   message: a wrong value, message or handler does not compile.
  * - IDL: uint8_t = octet, int8_t = int8, int32_t = long, uint32_t = unsigned long,
- *   float = float, std::string = string, std::vector<T> = sequence<T>; an enum is its width.
+ *   float = float, std::string = string, std::vector<T> = sequence<T>, std::array<T, N> =
+ *   T[N]; an enum is its width.
  * - Best-effort, no durability: state is resent periodically.
  * - The joystick asks, the MCB decides: a command is a request, and the joystick shows
  *   nothing until the matching state message says it happened.
@@ -75,10 +76,11 @@
 /* joystick -> MCB */
 #define RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND "rammp/joystick/seat_command"
 #define RAMMP_TYPE_SEAT_COMMAND "rammp/msg/SeatCommand"
-#define RAMMP_TOPIC_JOYSTICK_DRIVE_PROFILE_COMMAND "rammp/joystick/drive_profile_command"
-#define RAMMP_TYPE_DRIVE_PROFILE_COMMAND "rammp/msg/DriveProfileCommand"
 #define RAMMP_TOPIC_JOYSTICK_MOTOR_JOG "rammp/joystick/motor_jog"
 #define RAMMP_TYPE_MOTOR_JOG "rammp/msg/MotorJog"
+/* joystick or a bench tool -> MCB: more than one node sends it, so no publisher segment */
+#define RAMMP_TOPIC_DRIVE_PROFILE_COMMAND "rammp/drive_profile_command"
+#define RAMMP_TYPE_DRIVE_PROFILE_COMMAND "rammp/msg/DriveProfileCommand"
 
 /* MCB -> joystick. The state of the chair itself is RAMMP_ROS_TOPIC_MIB_STATUS, in
    messages/mib_message.hpp. */
@@ -94,8 +96,8 @@ namespace rammp {
 struct XYTwist;
 struct DriveCommand;
 struct SeatCommand;
-struct DriveProfileCommand;
 struct MotorJog;
+struct DriveProfileCommand;
 struct Diagnostics;
 struct Motors;
 
@@ -105,10 +107,10 @@ inline constexpr Topic<DriveCommand> kDriveCommand{RAMMP_ROS_TOPIC_DRIVE_COMMAND
                                                    RAMMP_ROS_TYPE_DRIVE_COMMAND};
 inline constexpr Topic<SeatCommand> kJoystickSeatCommand{RAMMP_TOPIC_JOYSTICK_SEAT_COMMAND,
                                                          RAMMP_TYPE_SEAT_COMMAND};
-inline constexpr Topic<DriveProfileCommand> kJoystickDriveProfileCommand{
-    RAMMP_TOPIC_JOYSTICK_DRIVE_PROFILE_COMMAND, RAMMP_TYPE_DRIVE_PROFILE_COMMAND};
 inline constexpr Topic<MotorJog> kJoystickMotorJog{RAMMP_TOPIC_JOYSTICK_MOTOR_JOG,
                                                    RAMMP_TYPE_MOTOR_JOG};
+inline constexpr Topic<DriveProfileCommand> kDriveProfileCommand{RAMMP_TOPIC_DRIVE_PROFILE_COMMAND,
+                                                                 RAMMP_TYPE_DRIVE_PROFILE_COMMAND};
 inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
                                                     RAMMP_TYPE_DIAGNOSTICS};
 inline constexpr Topic<Motors> kMibMotors{RAMMP_TOPIC_MIB_MOTORS, RAMMP_TYPE_MOTORS};
@@ -257,24 +259,26 @@ struct SeatCommand {
   float target;  /**< where to put it, in the axis' unit */
 };
 
+/** What a DriveProfileCommand does to its profile. */
 enum class DriveProfileAction : uint8_t {
   SET = 0,   /**< use `values` for `profile` */
   RESET = 1, /**< go back to the firmware's compiled-in limits for `profile` */
 };
 
-/** Change one MIB drive profile's limits. The MIB acts on a NEW `req_id` only (the
-    MotorTuning idiom), so send it until DriveProfileState::command_ack shows the
-    req_id, then read the result there. The MIB checks every value and rejects the whole
-    command if any is out of range. Applying the active profile while driving keeps the
-    chair's current speed and ramps to the new limits.
-    With `persist` set, SET also saves the values to the MIB's flash and RESET deletes
-    the saved copy, so the change survives a power cycle; without it the change lasts
-    until reboot, which is what you want while experimenting. 44 bytes on the wire. */
+/** Change one MIB drive profile's limits. The joystick or a bench tool sends it. The MIB
+    acts on a NEW `req_id` only (the MotorTuning idiom), so send it until
+    DriveProfileState.command_ack (mib_message.hpp) shows the req_id, then read the result
+    there. The MIB checks every value and rejects the whole command if any is out of
+    range. Applying the active profile while driving keeps the chair's current speed and
+    ramps to the new limits. With `persist` set, SET also saves the values to the MIB's
+    flash and RESET deletes the saved copy, so the change survives a power cycle; without
+    it the change lasts until reboot, which is what you want while experimenting. 44
+    bytes on the wire. */
 struct DriveProfileCommand {
-  uint8_t req_id;                 /**< +1 per request, wraps, skipping 0 */
+  uint8_t req_id;            /**< +1 per request, wraps, skipping 0 */
   DriveProfile profile;      /**< which profile to change */
-  DriveProfileAction action;      /**< SET or RESET */
-  uint8_t persist;                /**< 1 = also save (SET) or delete the saved copy (RESET) */
+  DriveProfileAction action; /**< SET or RESET */
+  uint8_t persist;           /**< 1 = also save (SET) or delete the saved copy (RESET) */
   DriveProfileValues values; /**< the new limits; SET only, ignored by RESET */
 };
 
