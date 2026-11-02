@@ -13,8 +13,8 @@ and types in this repository, then consume this repository as a submodule.
     message header uses.
   - `messages/control_message.hpp`: token arbitration for the base: who owns it
     (`ControlStatus`) and the tokened `TwistSetpoint`. ROS 2 types and names.
-  - `messages/estop_message.hpp`: the robot-wide e-stop, any node <-> the MIB; and
-    `EStopBroadcast`, the ROS 2 `/estop` the MIB relays its latch onto. ROS 2 facing.
+  - `messages/estop_message.hpp`: the robot-wide e-stop, any node <-> the MIB. ROS 2
+    facing: the arm and the Jetson read it as `rammp_common_interfaces/msg/EStop`.
   - `messages/header.hpp`: the ROS 2 `Time` and `Header`, shared by the messages
     that carry one.
   - `messages/joystick_message.hpp`: joystick <-> MIB. `XYTwist` and `DriveCommand`
