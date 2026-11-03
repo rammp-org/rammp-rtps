@@ -4,11 +4,10 @@
  * engaging is fail-safe by design, and only kEStopClearer can end the stop.
  *
  * - C++20. The struct IS the wire layout: XCDR1, fields in declaration order.
- * - The first four fields are the ROS EStop message (std_msgs/Header, engaged, source,
- *   reason). Its bool `engaged` is the EStopState `state` here, with the same byte values.
- *   pub_seq, clear_target and clear_pub_seq are appended, so a decoder that knows only the
- *   ROS layout still reads the start correctly. Being ROS 2 compatible is not a goal: the
- *   topic and type names follow the rammp convention.
+ * - ROS 2 facing: the arm and the Jetson read and publish it too, so it uses ROS 2 wire
+ *   names (rt/estop, the robot-wide /estop) and rammp_common_interfaces/msg/EStop mirrors
+ *   it field for field. This struct is the source of truth. One topic, one protocol, for
+ *   every node on the robot, firmware or ROS 2.
  * - The stamp is for the log only. Staleness is judged by receive time on the
  *   receiver's steady clock, never by the stamp, which depends on clock sync.
  *
@@ -24,10 +23,8 @@
  *                          it never ends the stop
  *   NOT_ENGAGED  "<src>"       clear attempt for <src>'s engagement   kEStopClearer only
  *
- * A plain NOT_ENGAGED is not a clear attempt (the ROS comment says false "clears it"):
- * otherwise any node's normal heartbeat would end another node's stop. A decoder that
- * knows only the ROS layout reads pub_seq = 0 and clear_target = "", so its messages are
- * heartbeats or engages, never clear attempts.
+ * A plain NOT_ENGAGED is not a clear attempt: otherwise any node's normal heartbeat would
+ * end another node's stop.
  *
  * Clear attempt (the full rules and races: pace-hmi-fw docs/plans/estop.md):
  *   - Every node sends at least every kEStopPolicy.period: state=ENGAGED while it wants
@@ -60,21 +57,16 @@
 #include "messages/header.hpp" /* Header: stamp for the log only, frame_id sent empty */
 #include "messages/topic.hpp"
 
-/* Broadcast: no publisher segment, any node publishes. */
-#define RAMMP_TOPIC_ESTOP "rammp/estop"
-#define RAMMP_TYPE_ESTOP "rammp/msg/EStop"
-
-/* The robot-wide ROS 2 e-stop, /estop, which the arm already serves and obeys: ROS 2 wire
-   names of rammp_common_interfaces/msg/EStop. The MIB relays its latch onto it (see
-   EStopBroadcast). */
+/* Broadcast: no publisher segment, any node publishes. ROS 2 wire names: the topic is the
+   robot-wide /estop (not under rammp/), which the arm already serves and obeys. */
 #define RAMMP_ROS_TOPIC_ESTOP "rt/estop"
 #define RAMMP_ROS_TYPE_ESTOP "rammp_common_interfaces::msg::dds_::EStop_"
 
 namespace rammp {
 
-/** What an e-stop message asks for. One octet on the wire with the same values as the ROS
-    message's bool `engaged` (0 = false, 1 = true). A receiver treats any value other than
-    NOT_ENGAGED as ENGAGED: the fail-safe reading. */
+/** What an e-stop message asks for. One octet on the wire: the .msg's `uint8 state`, with
+    STATE_NOT_ENGAGED / STATE_ENGAGED constants of the same values. A receiver treats any
+    value other than NOT_ENGAGED as ENGAGED: the fail-safe reading. */
 enum class EStopState : uint8_t {
   NOT_ENGAGED = 0, /**< heartbeat: this node is not asking for the stop */
   ENGAGED = 1,     /**< this node asks for the stop */
@@ -92,27 +84,7 @@ struct EStop {
                                  from clear_target when the attempt started */
 };
 
-inline constexpr Topic<EStop> kEStop{RAMMP_TOPIC_ESTOP, RAMMP_TYPE_ESTOP};
-
-/** The ROS 2 e-stop as the rest of the robot speaks it, field for field
-    rammp_common_interfaces/msg/EStop (header, engaged, source, reason): the first four
-    fields of EStop above, and nothing after them, so a ROS 2 subscriber never sees the
-    rammp handshake fields. Its rules are the ROS message's, not the rammp protocol's:
-    `engaged` true engages, `engaged` false CLEARS, and the stamp is load-bearing for a
-    clear. So a publisher sends it on change only. The MIB relays its latch: `true` (with
-    the latch's cause as `reason`) when the stop engages and about once a second while it
-    holds, `false` exactly once when the latch has cleared, never periodically. The MIB
-    also obeys it: any `true` from a source other than itself engages its latch, and a
-    `false` is ignored, since only the MIB clears. The joystick's e-stop stays on
-    rammp/estop; this is the bridge between the two. */
-struct EStopBroadcast {
-  Header header;      /**< stamp: when the state was read; all-zero = unstamped; frame_id "" */
-  bool engaged;       /**< true = engage the stop, false = clear it */
-  std::string source; /**< who published it, for the log; the MIB sends "mib" */
-  std::string reason; /**< free text, for the log; the MIB sends the latch's cause */
-};
-
-inline constexpr Topic<EStopBroadcast> kEStopBroadcast{RAMMP_ROS_TOPIC_ESTOP, RAMMP_ROS_TYPE_ESTOP};
+inline constexpr Topic<EStop> kEStop{RAMMP_ROS_TOPIC_ESTOP, RAMMP_ROS_TYPE_ESTOP};
 
 /** The only source whose clear attempts count: the MIB owns the latch. */
 inline constexpr char kEStopClearer[] = "mib";
