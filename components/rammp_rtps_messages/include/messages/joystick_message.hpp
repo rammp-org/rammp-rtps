@@ -132,7 +132,9 @@ inline constexpr Topic<Motors> kMibMotors{RAMMP_TOPIC_MIB_MOTORS, RAMMP_TYPE_MOT
   D(1, TEST_2, "T2", "Test actuator 2", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
   D(2, TEST_3, "T3", "Test actuator 3", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
   D(3, IMU_TILT, "I1", "IMU tilt", "Roll [deg]", 1, "Pitch [deg]", 1, "Heading [deg]", 1)          \
-  D(4, IMU_STATUS, "I2", "IMU status", "Yaw rate [deg/s]", 1, "Gyro cal [0-3]", 0, "Temp [C]", 0)
+  D(4, IMU_STATUS, "I2", "IMU status", "Yaw rate [deg/s]", 1, "Gyro cal [0-3]", 0, "Temp [C]", 0)  \
+  D(5, DRIVE_LEFT, "W1", "Drive wheel L", "Temp [C]", 1, "Current [A]", 2, "Fault code", 0)        \
+  D(6, DRIVE_RIGHT, "W2", "Drive wheel R", "Temp [C]", 1, "Current [A]", 2, "Fault code", 0)
 
 /* Generated from the tables: the ids (SeatAxis::ELEVATION = 0, ...) and the rows. */
 
