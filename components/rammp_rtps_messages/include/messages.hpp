@@ -2,8 +2,10 @@
 
 #include "messages/control_message.hpp"
 #include "messages/estop_message.hpp"
+#include "messages/geometry_message.hpp"
 #include "messages/header.hpp"
 #include "messages/joystick_message.hpp"
 #include "messages/mib_message.hpp"
 #include "messages/motor_message.hpp"
+#include "messages/odometry_message.hpp"
 #include "messages/push_assist_message.hpp"
