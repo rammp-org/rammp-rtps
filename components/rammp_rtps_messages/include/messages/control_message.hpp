@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <string>
 
+#include "messages/geometry_message.hpp" /* Twist */
 #include "messages/header.hpp"
 #include "messages/topic.hpp"
 
@@ -80,19 +81,6 @@ struct ControlStatus {
   uint64_t generation;      /**< bumps on every grant; a client that sees it move was
                                  dispossessed */
   uint64_t rejected_count;  /**< commands refused since boot */
-};
-
-/** geometry_msgs/Vector3 */
-struct Vector3 {
-  double x;
-  double y;
-  double z;
-};
-
-/** geometry_msgs/Twist */
-struct Twist {
-  Vector3 linear;  /**< m/s */
-  Vector3 angular; /**< rad/s */
 };
 
 /** A velocity command for the base, in base_link. Only linear.x (forward) and
