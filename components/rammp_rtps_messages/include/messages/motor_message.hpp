@@ -81,7 +81,17 @@ namespace rammp {
   X(0, FRONT_CASTER_LEFT, "front_caster_left", "Front caster L")                                   \
   X(1, FRONT_CASTER_RIGHT, "front_caster_right", "Front caster R")                                 \
   X(2, DRIVE_LEFT, "drive_left", "Drive L")                                                        \
-  X(3, DRIVE_RIGHT, "drive_right", "Drive R")
+  X(3, DRIVE_RIGHT, "drive_right", "Drive R")                                                      \
+  /* PEAR prototype base: the MIB itself publishes these MotorState topics for  \
+     its CAN motors (no board subscribes to their command topics). */           \
+  X(4, PEAR_WHEEL_FR, "pear_wheel_fr", "PEAR wheel FR")                                            \
+  X(5, PEAR_WHEEL_FL, "pear_wheel_fl", "PEAR wheel FL")                                            \
+  X(6, PEAR_WHEEL_BR, "pear_wheel_br", "PEAR wheel BR")                                            \
+  X(7, PEAR_WHEEL_BL, "pear_wheel_bl", "PEAR wheel BL")                                            \
+  X(8, PEAR_LINK_FR, "pear_link_fr", "PEAR link FR")                                               \
+  X(9, PEAR_LINK_FL, "pear_link_fl", "PEAR link FL")                                               \
+  X(10, PEAR_LINK_BR, "pear_link_br", "PEAR link BR")                                              \
+  X(11, PEAR_LINK_BL, "pear_link_bl", "PEAR link BL")
 
 enum class AxisId : uint8_t {
   UNASSIGNED = 255, /**< NVS default: not provisioned, no topics */

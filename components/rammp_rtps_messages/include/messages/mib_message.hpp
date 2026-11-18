@@ -51,6 +51,14 @@ struct seatState{
     float lateral_tilt{0.0f};    /**< Side-to-side seat tilt. */
     float elevation{0.0f};       /**< Seat elevation. */
     float translation{0.0f};      /**< Seat translation. */
+    /* PEAR prototype base (RAMMP_SEAT_AXIS_TABLE rows 4..7, same order): the
+       four corner 4-bar linkage angles in degrees, 0 = level. Appending here
+       shifts every later MibStatus field, so the HMI and the MIB must be
+       built from the same spec revision. */
+    float pear_link_fr{0.0f}; /**< Front-right linkage angle. */
+    float pear_link_fl{0.0f}; /**< Front-left linkage angle. */
+    float pear_link_br{0.0f}; /**< Back-right linkage angle. */
+    float pear_link_bl{0.0f}; /**< Back-left linkage angle. */
 };
 
 /** Topic used to publish the MIB status message. */

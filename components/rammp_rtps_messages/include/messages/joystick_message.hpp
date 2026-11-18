@@ -102,13 +102,28 @@ inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
   X(0, FRONT_BACK_TILT, "M1", "FB Tilt", -450, 900, 25, 1, "deg")                                  \
   X(1, LATERAL_TILT, "M2", "Side Tilt", -300, 300, 25, 1, "deg")                                   \
   X(2, ELEVATION, "M3", "Elevation", 0, 2500, 50, 1, "mm")                                         \
-  X(3, TRANSLATION, "M4", "Translation", 0, 500, 25, 1, "mm")
+  X(3, TRANSLATION, "M4", "Translation", 0, 500, 25, 1, "mm")                                       \
+  /* PEAR: the four corner 4-bar linkage angles (deg, 0 = level); one row per   \
+     corner so the HMI's DEBUG ACTUATORS page jogs them individually. */        \
+  X(4, PEAR_LINK_FR, "L1", "Link FR", -1150, 650, 10, 1, "deg")                                     \
+  X(5, PEAR_LINK_FL, "L2", "Link FL", 0, 1800, 10, 1, "deg")                                     \
+  X(6, PEAR_LINK_BR, "L3", "Link BR", 0, 1800, 10, 1, "deg")                                     \
+  X(7, PEAR_LINK_BL, "L4", "Link BL", -2150, -350, 10, 1, "deg")
 
 /* D(id, NAME, short, label, unit1, dec1, unit2, dec2, unit3, dec3); a unit "" = unused */
 #define RAMMP_DIAG_TABLE(D)                                                                        \
   D(0, TEST_1, "T1", "Test actuator 1", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
   D(1, TEST_2, "T2", "Test actuator 2", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
-  D(2, TEST_3, "T3", "Test actuator 3", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)
+  D(2, TEST_3, "T3", "Test actuator 3", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)           \
+  /* PEAR prototype base: four hub-wheel drives, four corner linkage motors */  \
+  D(3, PEAR_WHEEL_FR, "W1", "Wheel FR", "Temp [C]", 1, "Current [A]", 2, "Vel [rpm]", 1)           \
+  D(4, PEAR_WHEEL_FL, "W2", "Wheel FL", "Temp [C]", 1, "Current [A]", 2, "Vel [rpm]", 1)           \
+  D(5, PEAR_WHEEL_BR, "W3", "Wheel BR", "Temp [C]", 1, "Current [A]", 2, "Vel [rpm]", 1)           \
+  D(6, PEAR_WHEEL_BL, "W4", "Wheel BL", "Temp [C]", 1, "Current [A]", 2, "Vel [rpm]", 1)           \
+  D(7, PEAR_LINK_FR, "L1", "Link FR", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)             \
+  D(8, PEAR_LINK_FL, "L2", "Link FL", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)             \
+  D(9, PEAR_LINK_BR, "L3", "Link BR", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)             \
+  D(10, PEAR_LINK_BL, "L4", "Link BL", "Temp [C]", 1, "Current [A]", 2, "Pos [deg]", 1)
 
 /* Generated from the tables: the ids (SeatAxis::ELEVATION = 0, ...) and the rows. */
 
