@@ -20,6 +20,9 @@ and types in this repository, then consume this repository as a submodule.
     `TransformStamped`), shared by the messages that carry one.
   - `messages/header.hpp`: the ROS 2 `Time` and `Header`, shared by the messages
     that carry one.
+  - `messages/joint_state_message.hpp`: the base's joint positions, MIB -> ROS 2:
+    `sensor_msgs/JointState` on `/base/joint_states`, with the base URDF's joint names
+    and units. Standard ROS 2 type and names.
   - `messages/joystick_message.hpp`: joystick <-> MIB. `XYTwist` and `DriveCommand`
     are ROS 2 facing (below): the Jetson reads the stick and sends drive requests.
   - `messages/mib_message.hpp`: the MIB's state, which the joystick draws and the
@@ -71,9 +74,9 @@ and types in this repository, then consume this repository as a submodule.
   `control_service.hpp`) is the arm's protocol served under the `base` namespace,
   `rt/base/control_status`, `/base/acquire_control` and so on, so one orchestrator
   client on the Jetson speaks to the arm and the base alike. The base's other ROS 2
-  facing topics follow it (`rt/base/odom`).
+  facing topics follow it (`rt/base/odom`, `rt/base/joint_states`).
   A message whose type is a standard ROS 2 one (`nav_msgs/Odometry`,
-  `tf2_msgs/TFMessage`) keeps the standard package in its type name, has no `.msg`
+  `tf2_msgs/TFMessage`, `sensor_msgs/JointState`) keeps the standard package in its type name, has no `.msg`
   on rammp-interfaces-ros2, and its struct here mirrors the ROS definition; its
   topic is still named here, in its `RAMMP_ROS_TOPIC_*` macro.
 5. Add action definitions under `components/rammp_rtps_actions/include/`.
