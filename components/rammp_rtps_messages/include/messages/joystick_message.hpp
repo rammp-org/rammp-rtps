@@ -30,7 +30,8 @@
  * DriveCommand; the MIB's MibStatus in mib_message.hpp.
  *
  * Contents: Topics and types, Tables (seat axes, diagnostics), Messages (MotorJog and
- * Motors are the motor debug list: the motors themselves are in messages/motor_message.hpp).
+ * Motors are the motor debug list: the motors themselves are in messages/motor_message.hpp;
+ * ActuatorJog and Actuators are the same for the seat's leg actuators, several at once).
  *
  * The MIB's own state - what the chair is doing, where the seat is - is rammp::MibStatus
  * in messages/mib_message.hpp, which this header includes for DriveProfile.
@@ -77,6 +78,8 @@
 #define RAMMP_TYPE_SEAT_COMMAND "rammp/msg/SeatCommand"
 #define RAMMP_TOPIC_JOYSTICK_MOTOR_JOG "rammp/joystick/motor_jog"
 #define RAMMP_TYPE_MOTOR_JOG "rammp/msg/MotorJog"
+#define RAMMP_TOPIC_JOYSTICK_ACTUATOR_JOG "rammp/joystick/actuator_jog"
+#define RAMMP_TYPE_ACTUATOR_JOG "rammp/msg/ActuatorJog"
 
 /* MCB -> joystick. The state of the chair itself is RAMMP_ROS_TOPIC_MIB_STATUS, in
    messages/mib_message.hpp. */
@@ -84,6 +87,8 @@
 #define RAMMP_TYPE_DIAGNOSTICS "rammp/msg/Diagnostics"
 #define RAMMP_TOPIC_MIB_MOTORS "rammp/mib/motors"
 #define RAMMP_TYPE_MOTORS "rammp/msg/Motors"
+#define RAMMP_TOPIC_MIB_ACTUATORS "rammp/mib/actuators"
+#define RAMMP_TYPE_ACTUATORS "rammp/msg/Actuators"
 
 namespace rammp {
 
@@ -93,8 +98,10 @@ struct XYTwist;
 struct DriveCommand;
 struct SeatCommand;
 struct MotorJog;
+struct ActuatorJog;
 struct Diagnostics;
 struct Motors;
+struct Actuators;
 
 inline constexpr Topic<XYTwist> kJoystickXYTwist{RAMMP_ROS_TOPIC_JOYSTICK_XY_TWIST,
                                                  RAMMP_ROS_TYPE_XY_TWIST};
@@ -104,9 +111,12 @@ inline constexpr Topic<SeatCommand> kJoystickSeatCommand{RAMMP_TOPIC_JOYSTICK_SE
                                                          RAMMP_TYPE_SEAT_COMMAND};
 inline constexpr Topic<MotorJog> kJoystickMotorJog{RAMMP_TOPIC_JOYSTICK_MOTOR_JOG,
                                                    RAMMP_TYPE_MOTOR_JOG};
+inline constexpr Topic<ActuatorJog> kJoystickActuatorJog{RAMMP_TOPIC_JOYSTICK_ACTUATOR_JOG,
+                                                         RAMMP_TYPE_ACTUATOR_JOG};
 inline constexpr Topic<Diagnostics> kMcbDiagnostics{RAMMP_TOPIC_MCB_DIAGNOSTICS,
                                                     RAMMP_TYPE_DIAGNOSTICS};
 inline constexpr Topic<Motors> kMibMotors{RAMMP_TOPIC_MIB_MOTORS, RAMMP_TYPE_MOTORS};
+inline constexpr Topic<Actuators> kMibActuators{RAMMP_TOPIC_MIB_ACTUATORS, RAMMP_TYPE_ACTUATORS};
 
 /* -------------------------------------------------------------------------
  * Tables: one row per seat axis / diagnostics item. To add one, add ONE row: the next
@@ -263,6 +273,20 @@ struct MotorJog {
   int8_t direction; /**< -1 or +1; 0 = stop now */
 };
 
+/** Ask the MIB to jog several leg actuators together, for debugging and setup: hold-to-run,
+    so the carriages, or the front and rear casters, move at once instead of one by one.
+    Each message names the whole set: an actuator the last message left out stops, so
+    changing the selection mid-hold cannot leave one running. Resent at least every
+    100 ms while held; the MIB stops them all 300 ms after the last one. Every actuator
+    in the set moves the same way, at its own jog speed; the MIB picks the speed, clamps
+    each to its range, and jogs only while it is IDLE, the e-stop is clear and no seat
+    move is under way. An id the MIB cannot move (not ready, or unknown) is skipped; the
+    rest still move. */
+struct ActuatorJog {
+  std::vector<uint8_t> ids; /**< Actuators entries' ids; empty = stop all now */
+  int8_t direction;         /**< -1 or +1; 0 = stop now */
+};
+
 /* -------------------------------------------------------------------------
  * Messages: MCB -> joystick (the MCB owns the state and resends it, changed or not)
  * ---------------------------------------------------------------------- */
@@ -294,6 +318,25 @@ struct MotorSummary {
 struct Motors {
   uint8_t seq;                      /**< +1 per message, wraps */
   std::vector<MotorSummary> motors; /**< one per axis */
+};
+
+/** One leg actuator (a caster, a main leg, a carriage), as the MIB last saw it. */
+struct ActuatorSummary {
+  uint8_t id;         /**< the MIB's actuator index: a joystick lists it, never switches on it */
+  uint8_t ready;      /**< 1 = the MIB can move it (up, and homed where it must be); 0 = not */
+  uint8_t moving;     /**< 1 = a move or a jog is under way */
+  int32_t position;   /**< encoder counts, the MIB's last reading */
+  int32_t min_counts; /**< calibrated travel, inclusive: the MIB clamps every move to it */
+  int32_t max_counts;
+  std::string label; /**< "LCarr", the MIB's short name for it */
+};
+
+/** The leg actuators the MIB drives, in its own order, at about 5 Hz. The joystick builds
+    its actuator list from this, as from Motors, so the list and names follow the MIB with
+    no joystick rebuild. Empty while the actuators are not up. */
+struct Actuators {
+  uint8_t seq;                            /**< +1 per message, wraps */
+  std::vector<ActuatorSummary> actuators; /**< one per actuator */
 };
 
 } // namespace rammp
