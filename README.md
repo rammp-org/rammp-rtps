@@ -22,6 +22,8 @@ and types in this repository, then consume this repository as a submodule.
     that carry one.
   - `messages/joystick_message.hpp`: joystick <-> MIB. `XYTwist` and `DriveCommand`
     are ROS 2 facing (below): the Jetson reads the stick and sends drive requests.
+    The debug lists: `Motors` and `MotorJog` (one motor at a time), `Actuators` and
+    `ActuatorJog` (the leg actuators, several at once).
   - `messages/mib_message.hpp`: the MIB's state, which the joystick draws and the
     Jetson reads. ROS 2 facing.
   - `messages/motor_message.hpp`: MIB <-> PACE RACER motor controllers, per
